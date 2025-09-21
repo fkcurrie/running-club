@@ -29,5 +29,20 @@
       </div>
     </article>
   </main>
+
+  <script>
+    import { supabase } from '../lib/supabase';
+
+    // Check if the user is already logged in.
+    // If they are, redirect them straight to the schedule page.
+    async function checkAndRedirect() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        window.location.href = '/schedule';
+      }
+    }
+
+    checkAndRedirect();
+  </script>
 </body>
 </html>
