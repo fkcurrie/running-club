@@ -1,0 +1,72 @@
+---
+// src/pages/signup.astro
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up | Running Club</title>
+</head>
+<body>
+  <h1>Create Your Account</h1>
+  <form id="signup-form">
+    <label for="full_name">Full Name:</label><br>
+    <input type="text" id="full_name" name="full_name" required><br><br>
+    
+    <label for="grade">Grade:</label><br>
+    <input type="number" id="grade" name="grade" required><br><br>
+
+    <label for="email">School Email:</label><br>
+    <input type="email" id="email" name="email" required><br><br>
+    
+    <label for="password">Password:</label><br>
+    <input type="password" id="password" name="password" required minlength="6"><br><br>
+    
+    <button type="submit">Sign Up</button>
+  </form>
+  <p>Already have an account? <a href="/login">Log In</a></p>
+  
+  <script>
+    import { supabase } from '../lib/supabase';
+
+    const form = document.getElementById('signup-form');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const formData = new FormData(form);
+      const email = formData.get('email');
+      const password = formData.get('password');
+      const fullName = formData.get('full_name');
+      const grade = formData.get('grade');
+
+      // Basic validation
+      if (!email || !password || !fullName || !grade) {
+        alert('Please fill out all fields.');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          data: {
+            full_name: fullName,
+            grade: grade,
+          }
+        }
+      });
+
+      if (error) {
+        alert('Error signing up: ' + error.message);
+        console.error('Signup Error:', error);
+      } else {
+        // The user needs to confirm their email.
+        // The `user` object is available in data.user, but session is null until confirmation.
+        alert('Success! Please check your email for a confirmation link to complete your registration.');
+        form.reset();
+      }
+    });
+  </script>
+</body>
+</html>

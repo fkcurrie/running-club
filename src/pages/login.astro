@@ -1,0 +1,56 @@
+---
+// src/pages/login.astro
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Running Club</title>
+</head>
+<body>
+  <h1>Log In</h1>
+  <form id="login-form">
+    <label for="email">School Email:</label><br>
+    <input type="email" id="email" name="email" required><br><br>
+    
+    <label for="password">Password:</label><br>
+    <input type="password" id="password" name="password" required><br><br>
+    
+    <button type="submit">Log In</button>
+  </form>
+  <p>Don't have an account? <a href="/signup">Sign Up</a></p>
+
+  <script>
+    import { supabase } from '../lib/supabase';
+
+    const form = document.getElementById('login-form');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const formData = new FormData(form);
+      const email = formData.get('email');
+      const password = formData.get('password');
+
+      if (!email || !password) {
+        alert('Please enter your email and password.');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        alert('Error logging in: ' + error.message);
+        console.error('Login Error:', error);
+      } else {
+        // On successful login, Supabase sets a cookie and the user is authenticated.
+        // Redirect to the members-only schedule page.
+        window.location.href = '/schedule';
+      }
+    });
+  </script>
+</body>
+</html>
