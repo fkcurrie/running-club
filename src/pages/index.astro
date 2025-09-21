@@ -1,5 +1,7 @@
 ---
 // src/pages/index.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
 <html lang="en">
 <head>
@@ -8,7 +10,7 @@
   <title>Michelle O'Bonsawin Running Club</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
-<body>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
   <main class="container">
     <header style="text-align: center; margin-top: 2rem;">
       <h1>Club de Course Michelle O'Bonsawin</h1>
@@ -31,18 +33,28 @@
   </main>
 
   <script>
-    import { supabase } from '../lib/supabase';
+    import { createClient } from '@supabase/supabase-js';
 
-    // Check if the user is already logged in.
-    // If they are, redirect them straight to the schedule page.
-    async function checkAndRedirect() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        window.location.href = '/schedule';
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+      // Check if the user is already logged in.
+      // If they are, redirect them straight to the schedule page.
+      async function checkAndRedirect() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.location.href = '/schedule';
+        }
       }
-    }
 
-    checkAndRedirect();
+      checkAndRedirect();
+    }
   </script>
 </body>
 </html>

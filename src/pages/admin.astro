@@ -1,6 +1,7 @@
 ---
 // src/pages/admin.astro
-// Server-side data fetching removed to fix the empty table issue.
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
 
 <html lang="en">
@@ -10,7 +11,7 @@
   <title>Admin Dashboard | Running Club</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
-<body>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
   <main class="container">
     <nav>
       <ul>
@@ -71,114 +72,123 @@
   </main>
 
   <script>
-    import { supabase } from '../lib/supabase';
+    import { createClient } from '@supabase/supabase-js';
     import type { Event } from '../lib/types';
 
-    const eventsTbody = document.getElementById('events-tbody');
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-    // --- 1. Fetch and Display Events ---
-    async function fetchAndDisplayEvents() {
-      const { data: events, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const eventsTbody = document.getElementById('events-tbody');
 
-      if (error) {
-        console.error("Error fetching events:", error);
-        eventsTbody.innerHTML = '<tr><td colspan="4">Error loading events.</td></tr>';
-        return;
+      // --- 1. Fetch and Display Events ---
+      async function fetchAndDisplayEvents() {
+        const { data: events, error } = await supabase
+          .from('events')
+          .select('*')
+          .order('event_date', { ascending: true });
+
+        if (error) {
+          console.error("Error fetching events:", error);
+          eventsTbody.innerHTML = '<tr><td colspan="4">Error loading events.</td></tr>';
+          return;
+        }
+
+        if (events.length === 0) {
+          eventsTbody.innerHTML = '<tr><td colspan="4">No events found. Add one above!</td></tr>';
+          return;
+        }
+
+        eventsTbody.innerHTML = events.map((event) => `
+          <tr data-event-id="${event.id}">
+            <td>${event.event_type}</td>
+            <td>${event.title}</td>
+            <td>${new Date(event.event_date).toLocaleString()}</td>
+            <td style="text-align: center; white-space: nowrap;">
+              <a href="/admin/edit/${event.id}" title="Edit" class="contrast" style="text-decoration: none; margin-right: 1rem;">✏️</a>
+              <a href="#" title="Delete" data-action="delete" class="contrast" style="text-decoration: none; color: var(--pico-color-red-500);">🗑️</a>
+            </td>
+          </tr>
+        `).join('');
       }
 
-      if (events.length === 0) {
-        eventsTbody.innerHTML = '<tr><td colspan="4">No events found. Add one above!</td></tr>';
-        return;
+      // --- 2. Page Protection and Data Loading ---
+      async function checkAdminStatusAndLoadData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
+
+        if (error || !profile || !profile.is_admin) {
+          console.error('Admin access denied.');
+          window.location.href = '/';
+          return;
+        }
+        
+        // If the user is a confirmed admin, load the events
+        fetchAndDisplayEvents();
       }
+      checkAdminStatusAndLoadData();
 
-      eventsTbody.innerHTML = events.map((event) => `
-        <tr data-event-id="${event.id}">
-          <td>${event.event_type}</td>
-          <td>${event.title}</td>
-          <td>${new Date(event.event_date).toLocaleString()}</td>
-          <td style="text-align: center; white-space: nowrap;">
-            <a href="/admin/edit/${event.id}" title="Edit" class="contrast" style="text-decoration: none; margin-right: 1rem;">✏️</a>
-            <a href="#" title="Delete" data-action="delete" class="contrast" style="text-decoration: none; color: var(--pico-color-red-500);">🗑️</a>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    // --- 2. Page Protection and Data Loading ---
-    async function checkAdminStatusAndLoadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        window.location.href = '/login';
-        return;
-      }
-
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single();
-
-      if (error || !profile || !profile.is_admin) {
-        console.error('Admin access denied.');
+      // --- 3. Handle Logout ---
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await supabase.auth.signOut();
         window.location.href = '/';
-        return;
-      }
-      
-      // If the user is a confirmed admin, load the events
-      fetchAndDisplayEvents();
-    }
-    checkAdminStatusAndLoadData();
+      });
 
-    // --- 3. Handle Logout ---
-    document.getElementById('logout-button').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      window.location.href = '/';
-    });
+      // --- 4. Handle Add Event Form ---
+      document.getElementById('add-event-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const formData = new FormData(form);
+        const newEvent = {
+          event_type: formData.get('event_type'),
+          title: formData.get('title'),
+          event_date: formData.get('event_date'),
+          description: formData.get('description'),
+        };
 
-    // --- 4. Handle Add Event Form ---
-    document.getElementById('add-event-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget as HTMLFormElement;
-      const formData = new FormData(form);
-      const newEvent = {
-        event_type: formData.get('event_type'),
-        title: formData.get('title'),
-        event_date: formData.get('event_date'),
-        description: formData.get('description'),
-      };
+        const { error } = await supabase.from('events').insert([newEvent]);
 
-      const { error } = await supabase.from('events').insert([newEvent]);
+        if (error) {
+          alert('Error adding event: ' + error.message);
+        } else {
+          alert('Event added successfully!');
+          location.reload();
+        }
+      });
 
-      if (error) {
-        alert('Error adding event: ' + error.message);
-      } else {
-        alert('Event added successfully!');
-        location.reload();
-      }
-    });
+      // --- 5. Handle Delete Buttons ---
+      eventsTbody.addEventListener('click', async (event) => {
+        const target = event.target as HTMLElement;
+        if (target.dataset.action === 'delete') {
+          event.preventDefault(); // Prevent the link from navigating
+          const row = target.closest('tr');
+          const eventId = row.dataset.eventId;
 
-    // --- 5. Handle Delete Buttons ---
-    eventsTbody.addEventListener('click', async (event) => {
-      const target = event.target as HTMLElement;
-      if (target.dataset.action === 'delete') {
-        event.preventDefault(); // Prevent the link from navigating
-        const row = target.closest('tr');
-        const eventId = row.dataset.eventId;
-
-        if (confirm('Are you sure you want to delete this event?')) {
-          const { error } = await supabase.from('events').delete().eq('id', eventId);
-          if (error) {
-            alert('Error deleting event: ' + error.message);
-          } else {
-            row.remove();
+          if (confirm('Are you sure you want to delete this event?')) {
+            const { error } = await supabase.from('events').delete().eq('id', eventId);
+            if (error) {
+              alert('Error deleting event: ' + error.message);
+            } else {
+              row.remove();
+            }
           }
         }
-      }
-    });
+      });
+    }
   </script>
 </body>
 </html>

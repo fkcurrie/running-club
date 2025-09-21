@@ -1,5 +1,7 @@
 ---
 // src/pages/login.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
 <html lang="en">
 <head>
@@ -8,7 +10,7 @@
   <title>Login | Running Club</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
-<body>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
   <main class="container" style="max-width: 600px; margin-top: 5rem;">
     <article>
       <h1 style="text-align: center;">Member Login</h1>
@@ -26,34 +28,43 @@
   </main>
 
   <script>
-    import { supabase } from '../lib/supabase';
+    import { createClient } from '@supabase/supabase-js';
 
-    const form = document.getElementById('login-form');
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const form = document.getElementById('login-form');
 
-      const formData = new FormData(form);
-      const email = formData.get('email');
-      const password = formData.get('password');
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
 
-      if (!email || !password) {
-        alert('Please enter your email and password.');
-        return;
-      }
+        const formData = new FormData(form);
+        const email = formData.get('email');
+        const password = formData.get('password');
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
+        if (!email || !password) {
+          alert('Please enter your email and password.');
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+
+        if (error) {
+          alert('Error logging in: ' + error.message);
+          console.error('Login Error:', error);
+        } else {
+          window.location.href = '/schedule';
+        }
       });
-
-      if (error) {
-        alert('Error logging in: ' + error.message);
-        console.error('Login Error:', error);
-      } else {
-        window.location.href = '/schedule';
-      }
-    });
+    }
   </script>
 </body>
 </html>

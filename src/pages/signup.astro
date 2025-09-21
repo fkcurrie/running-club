@@ -1,5 +1,7 @@
 ---
 // src/pages/signup.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
 <html lang="en">
 <head>
@@ -8,7 +10,7 @@
   <title>Sign Up | Running Club</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
-<body>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
   <main class="container" style="max-width: 600px; margin-top: 5rem;">
     <article>
       <h1 style="text-align: center;">Create Your Account</h1>
@@ -32,43 +34,52 @@
   </main>
   
   <script>
-    import { supabase } from '../lib/supabase';
+    import { createClient } from '@supabase/supabase-js';
 
-    const form = document.getElementById('signup-form');
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const form = document.getElementById('signup-form');
 
-      const formData = new FormData(form);
-      const email = formData.get('email');
-      const password = formData.get('password');
-      const fullName = formData.get('full_name');
-      const grade = formData.get('grade');
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
 
-      if (!email || !password || !fullName || !grade) {
-        alert('Please fill out all fields.');
-        return;
-      }
+        const formData = new FormData(form);
+        const email = formData.get('email');
+        const password = formData.get('password');
+        const fullName = formData.get('full_name');
+        const grade = formData.get('grade');
 
-      const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-          data: {
-            full_name: fullName,
-            grade: grade,
+        if (!email || !password || !fullName || !grade) {
+          alert('Please fill out all fields.');
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              full_name: fullName,
+              grade: grade,
+            }
           }
+        });
+
+        if (error) {
+          alert('Error signing up: ' + error.message);
+          console.error('Signup Error:', error);
+        } else {
+          alert('Success! Please check your email for a confirmation link to complete your registration.');
+          form.reset();
         }
       });
-
-      if (error) {
-        alert('Error signing up: ' + error.message);
-        console.error('Signup Error:', error);
-      } else {
-        alert('Success! Please check your email for a confirmation link to complete your registration.');
-        form.reset();
-      }
-    });
+    }
   </script>
 </body>
 </html>
