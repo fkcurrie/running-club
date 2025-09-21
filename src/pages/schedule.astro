@@ -1,69 +1,125 @@
 ---
 // src/pages/schedule.astro
+// No server-side code needed here anymore.
 ---
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Schedule | Running Club</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body>
-  <h1>Club Schedule</h1>
-  <p>This page is for members only. If you can see this, you are logged in!</p>
-  
-  <h2>Upcoming Practices</h2>
-  <ul>
-    <li>Monday, 3:30 PM - Track workout</li>
-    <li>Wednesday, 3:30 PM - Tempo run</li>
-    <li>Friday, 3:30 PM - Long, slow distance</li>
-  </ul>
+  <main class="container">
+    <nav>
+      <ul>
+        <li><strong>Club Schedule</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/admin" id="admin-link" style="display: none;">Admin Dashboard</a></li>
+        <li><a href="#" id="logout-button">Logout</a></li>
+      </ul>
+    </nav>
 
-  <h2>Upcoming Races</h2>
-  <ul>
-    <li>October 12th - City Wide 5k</li>
-    <li>November 23rd - Santa Shuffle 10k</li>
-  </ul>
+    <h1>Upcoming Events</h1>
+    <p>This schedule is for members only. Welcome!</p>
 
-  <button id="logout-button">Log Out</button>
+    <article>
+      <h2>Upcoming Practices</h2>
+      <div id="practices-list">
+        <p aria-busy="true">Loading practices...</p>
+      </div>
+    </article>
+
+    <article>
+      <h2>Upcoming Races</h2>
+      <div id="races-list">
+        <p aria-busy="true">Loading races...</p>
+      </div>
+    </article>
+  </main>
 
   <script>
     import { supabase } from '../lib/supabase';
+    import type { Event } from '../lib/types';
 
-    // 1. Protect the page
-    async function checkSession() {
-      const { data, error } = await supabase.auth.getSession();
+    const adminLink = document.getElementById('admin-link');
+    const practicesList = document.getElementById('practices-list');
+    const racesList = document.getElementById('races-list');
+
+    // --- 1. Fetch and Display Events ---
+    async function fetchAndDisplayEvents() {
+      const { data: events, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('event_date', { ascending: true });
 
       if (error) {
-        console.error('Error getting session:', error);
-        // Redirect to login even if there's an error
-        window.location.href = '/login';
+        console.error("Error fetching events:", error.message);
+        practicesList.innerHTML = '<p>Could not load practices.</p>';
+        racesList.innerHTML = '<p>Could not load races.</p>';
         return;
       }
-      
-      if (!data.session) {
-        // If no session exists, the user is not logged in.
-        // Redirect them to the login page.
-        window.location.href = '/login';
+
+      const practices = events.filter(e => e.event_type === 'Practice');
+      const races = events.filter(e => e.event_type === 'Race');
+
+      // Display Practices
+      if (practices.length > 0) {
+        practicesList.innerHTML = `<ul>${practices.map((event) => `
+          <li>
+            <strong>${new Date(event.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${new Date(event.event_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</strong>: ${event.title}
+            ${event.description ? `<p><small>${event.description}</small></p>` : ''}
+          </li>
+        `).join('')}</ul>`;
+      } else {
+        practicesList.innerHTML = '<p>No new practices scheduled. Check back soon!</p>';
+      }
+
+      // Display Races
+      if (races.length > 0) {
+        racesList.innerHTML = `<ul>${races.map((event) => `
+          <li>
+            <strong>${new Date(event.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>: ${event.title}
+            ${event.description ? `<p><small>${event.description}</small></p>` : ''}
+          </li>
+        `).join('')}</ul>`;
+      } else {
+        racesList.innerHTML = '<p>No new races scheduled. Check back soon!</p>';
       }
     }
 
-    // Run the check as soon as the page loads
-    checkSession();
-
-
-    // 2. Handle Logout
-    const logoutButton = document.getElementById('logout-button');
-
-    logoutButton.addEventListener('click', async () => {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        console.error('Error logging out:', error);
-        alert('Failed to log out. Please try again.');
-      } else {
-        // On successful logout, redirect to the home page.
-        window.location.href = '/';
+    // --- 2. Protect the page and check for admin status ---
+    async function checkSessionAndLoadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        window.location.href = '/login';
+        return; // Stop execution if not logged in
       }
+
+      // If logged in, fetch the data
+      fetchAndDisplayEvents();
+
+      // And check if the user is an admin to show the admin link
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (profile && profile.is_admin) {
+        adminLink.style.display = 'block';
+      }
+    }
+    checkSessionAndLoadData();
+
+    // --- 3. Handle Logout ---
+    const logoutButton = document.getElementById('logout-button');
+    logoutButton.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
     });
   </script>
 </body>

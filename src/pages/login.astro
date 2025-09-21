@@ -6,19 +6,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login | Running Club</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body>
-  <h1>Log In</h1>
-  <form id="login-form">
-    <label for="email">School Email:</label><br>
-    <input type="email" id="email" name="email" required><br><br>
-    
-    <label for="password">Password:</label><br>
-    <input type="password" id="password" name="password" required><br><br>
-    
-    <button type="submit">Log In</button>
-  </form>
-  <p>Don't have an account? <a href="/signup">Sign Up</a></p>
+  <main class="container" style="max-width: 600px; margin-top: 5rem;">
+    <article>
+      <h1 style="text-align: center;">Member Login</h1>
+      <form id="login-form">
+        <label for="email">School Email</label>
+        <input type="email" id="email" name="email" placeholder="your.name@school.ca" required>
+        
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+        
+        <button type="submit" class="primary">Log In</button>
+      </form>
+      <p style="text-align: center;">Don't have an account? <a href="/signup">Sign Up</a></p>
+    </article>
+  </main>
 
   <script>
     import { supabase } from '../lib/supabase';
@@ -46,8 +51,6 @@
         alert('Error logging in: ' + error.message);
         console.error('Login Error:', error);
       } else {
-        // On successful login, Supabase sets a cookie and the user is authenticated.
-        // Redirect to the members-only schedule page.
         window.location.href = '/schedule';
       }
     });
