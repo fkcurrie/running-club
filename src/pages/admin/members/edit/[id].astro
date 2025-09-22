@@ -1,5 +1,14 @@
 ---
-// src/pages/admin/edit/[id].astro
+// src/pages/admin/members/edit/[id].astro
+import type { APIRoute } from 'astro';
+
+// This page has two roles:
+// 1. GET: Render a form to edit a member's details.
+// 2. POST: Handle the form submission to update the member.
+
+// For now, we'll just handle the GET request to display the form.
+// The form submission logic will be handled by a client-side script.
+
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
@@ -8,24 +17,24 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit Event | Admin Dashboard</title>
+  <title>Edit Member | Admin Dashboard</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
   <main class="container">
     <nav>
       <ul>
-        <li><strong><a href="/admin">Admin Dashboard</a> / Edit Event</strong></li>
+        <li><strong><a href="/admin">Admin</a> / <a href="/admin/members">Members</a> / Edit</strong></li>
       </ul>
       <ul>
         <li><a href="#" id="logout-button">Logout</a></li>
       </ul>
     </nav>
 
-    <h1>Edit Event</h1>
+    <h1>Edit Member</h1>
 
     <article id="edit-form-container">
-      <p aria-busy="true">Loading event data...</p>
+      <p aria-busy="true">Loading member data...</p>
     </article>
   </main>
 
@@ -41,52 +50,40 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const formContainer = document.getElementById('edit-form-container');
-      const eventId = window.location.pathname.split('/').pop();
+      const memberId = window.location.pathname.split('/').pop();
 
-      // --- 1. Fetch Event Data and Display Form ---
+      // --- 1. Fetch Member Data and Display Form ---
       async function fetchAndDisplayForm() {
-        const { data: event, error } = await supabase
-          .from('events')
+        const { data: member, error } = await supabase
+          .from('profiles')
           .select('*')
-          .eq('id', eventId)
+          .eq('id', memberId)
           .single();
 
-        if (error || !event) {
-          console.error("Error fetching event:", error);
-          formContainer.innerHTML = '<p>Could not find event.</p>';
+        if (error || !member) {
+          console.error("Error fetching member:", error);
+          formContainer.innerHTML = '<p>Could not find member.</p>';
           return;
         }
 
-        // Format the date for the datetime-local input
-        const eventDate = new Date(event.event_date).toISOString().slice(0, 16);
-
+        // Render the form
         formContainer.innerHTML = `
-          <form id="edit-event-form">
-            <div class="grid">
-              <label for="event_type">
-                Event Type
-                <select id="event_type" name="event_type" required>
-                  <option value="Practice" ${event.event_type === 'Practice' ? 'selected' : ''}>Practice</option>
-                  <option value="Race" ${event.event_type === 'Race' ? 'selected' : ''}>Race</option>
-                </select>
-              </label>
-              <label for="title">
-                Title
-                <input type="text" id="title" name="title" value="${event.title}" required>
-              </label>
-            </div>
+          <form id="edit-form">
+            <label for="full_name">Full Name</label>
+            <input type="text" id="full_name" name="full_name" value="${member.full_name}" required>
             
-            <label for="event_date">Date and Time</label>
-            <input type="datetime-local" id="event_date" name="event_date" value="${eventDate}" required>
+            <label for="grade">Grade</label>
+            <input type="number" id="grade" name="grade" value="${member.grade}" required>
 
-            <label for="description">Description</label>
-            <textarea id="description" name="description">${event.description || ''}</textarea>
-
+            <label for="email">Email (read-only)</label>
+            <input type="email" id="email" name="email" value="${member.email}" readonly>
+            
             <button type="submit">Save Changes</button>
           </form>
         `;
 
-        document.getElementById('edit-event-form').addEventListener('submit', handleUpdate);
+        // Add the submit event listener AFTER the form is in the DOM
+        document.getElementById('edit-form').addEventListener('submit', handleUpdate);
       }
 
       // --- 2. Handle Form Submission ---
@@ -96,22 +93,20 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
         const formData = new FormData(form);
         
         const updatedData = {
-          event_type: formData.get('event_type'),
-          title: formData.get('title'),
-          event_date: formData.get('event_date'),
-          description: formData.get('description'),
+          full_name: formData.get('full_name'),
+          grade: formData.get('grade'),
         };
 
         const { error } = await supabase
-          .from('events')
+          .from('profiles')
           .update(updatedData)
-          .eq('id', eventId);
+          .eq('id', memberId);
 
         if (error) {
-          alert('Error updating event: ' + error.message);
+          alert('Error updating member: ' + error.message);
         } else {
-          alert('Event updated successfully!');
-          window.location.href = '/admin';
+          alert('Member updated successfully!');
+          window.location.href = '/admin/members';
         }
       }
 
@@ -123,7 +118,12 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
           return;
         }
 
-        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
+
         if (!profile || !profile.is_admin) {
           window.location.href = '/';
           return;

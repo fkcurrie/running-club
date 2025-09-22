@@ -23,7 +23,40 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       </ul>
     </nav>
 
+    <article>
+      <h2>Manage Announcements</h2>
+      <form id="announcement-form">
+        <input type="hidden" name="id">
+        <label for="title">Title</label>
+        <input type="text" id="announcement-title" name="title" required>
+        <label for="content">Content</label>
+        <textarea id="announcement-content" name="content" required></textarea>
+        <button type="submit">Save Announcement</button>
+        <button type="reset" class="secondary">Clear Form</button>
+      </form>
+    </article>
+
+    <article>
+      <h3>Existing Announcements</h3>
+      <table id="announcements-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="announcements-tbody">
+          <tr><td colspan="3" aria-busy="true">Loading...</td></tr>
+        </tbody>
+      </table>
+    </article>
+
+    <hr>
+
     <h1>Manage Events</h1>
+
+    <a href="/admin/members" role="button" class="secondary">Manage Members</a>
 
     <article>
       <h2>Add New Event</h2>
@@ -84,31 +117,62 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const eventsTbody = document.getElementById('events-tbody');
+      const announcementsTbody = document.getElementById('announcements-tbody');
+      const announcementForm = document.getElementById('announcement-form');
+      let announcements = []; // Cache announcements
 
-      // --- 1. Fetch and Display Events ---
+      // --- 1. Fetch and Display Data ---
+      async function fetchData() {
+        fetchAndDisplayEvents();
+        fetchAndDisplayAnnouncements();
+      }
+
+      async function fetchAndDisplayAnnouncements() {
+        const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+        if (error) {
+          console.error("Error fetching announcements:", error);
+          announcementsTbody.innerHTML = '<tr><td colspan="3">Error loading announcements.</td></tr>';
+          return;
+        }
+        announcements = data;
+        renderAnnouncements();
+      }
+      
+      function renderAnnouncements() {
+        if (announcements.length === 0) {
+          announcementsTbody.innerHTML = '<tr><td colspan="3">No announcements yet.</td></tr>';
+          return;
+        }
+        announcementsTbody.innerHTML = announcements.map(item => `
+          <tr data-id="${item.id}">
+            <td>${item.title}</td>
+            <td>${new Date(item.created_at).toLocaleDateString()}</td>
+            <td>
+              <a href="#" data-action="edit-announcement">Edit</a> | 
+              <a href="#" data-action="delete-announcement" style="color: var(--pico-color-red-500);">Delete</a>
+            </td>
+          </tr>
+        `).join('');
+      }
+
       async function fetchAndDisplayEvents() {
-        const { data: events, error } = await supabase
-          .from('events')
-          .select('*')
-          .order('event_date', { ascending: true });
-
+        const { data: events, error } = await supabase.from('events').select('*').order('event_date', { ascending: true });
         if (error) {
           console.error("Error fetching events:", error);
           eventsTbody.innerHTML = '<tr><td colspan="4">Error loading events.</td></tr>';
           return;
         }
-
         if (events.length === 0) {
           eventsTbody.innerHTML = '<tr><td colspan="4">No events found. Add one above!</td></tr>';
           return;
         }
-
         eventsTbody.innerHTML = events.map((event) => `
           <tr data-event-id="${event.id}">
             <td>${event.event_type}</td>
             <td>${event.title}</td>
             <td>${new Date(event.event_date).toLocaleString()}</td>
             <td style="text-align: center; white-space: nowrap;">
+              <a href="/admin/rsvps/${event.id}" title="View RSVPs" class="contrast" style="text-decoration: none; margin-right: 1rem;">👥</a>
               <a href="/admin/edit/${event.id}" title="Edit" class="contrast" style="text-decoration: none; margin-right: 1rem;">✏️</a>
               <a href="#" title="Delete" data-action="delete" class="contrast" style="text-decoration: none; color: var(--pico-color-red-500);">🗑️</a>
             </td>
@@ -119,26 +183,14 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       // --- 2. Page Protection and Data Loading ---
       async function checkAdminStatusAndLoadData() {
         const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          window.location.href = '/login';
-          return;
-        }
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-
+        if (!user) { window.location.href = '/login'; return; }
+        const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
         if (error || !profile || !profile.is_admin) {
           console.error('Admin access denied.');
           window.location.href = '/';
           return;
         }
-        
-        // If the user is a confirmed admin, load the events
-        fetchAndDisplayEvents();
+        fetchData();
       }
       checkAdminStatusAndLoadData();
 
@@ -148,36 +200,72 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
         window.location.href = '/';
       });
 
-      // --- 4. Handle Add Event Form ---
-      document.getElementById('add-event-form').addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const form = event.currentTarget as HTMLFormElement;
-        const formData = new FormData(form);
-        const newEvent = {
-          event_type: formData.get('event_type'),
+      // --- 4. Handle Announcement Form ---
+      announcementForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(announcementForm);
+        const id = formData.get('id');
+        const announcement = {
           title: formData.get('title'),
-          event_date: formData.get('event_date'),
-          description: formData.get('description'),
+          content: formData.get('content'),
         };
 
-        const { error } = await supabase.from('events').insert([newEvent]);
+        let error;
+        if (id) {
+          // Update existing
+          ({ error } = await supabase.from('announcements').update(announcement).eq('id', id));
+        } else {
+          // Insert new
+          ({ error } = await supabase.from('announcements').insert(announcement));
+        }
 
         if (error) {
-          alert('Error adding event: ' + error.message);
+          alert('Error saving announcement: ' + error.message);
         } else {
-          alert('Event added successfully!');
-          location.reload();
+          announcementForm.reset();
+          fetchAndDisplayAnnouncements();
         }
       });
 
-      // --- 5. Handle Delete Buttons ---
+      announcementForm.addEventListener('reset', () => {
+        announcementForm.querySelector('[name="id"]').value = '';
+      });
+
+      // --- 5. Handle Announcement Table Actions ---
+      announcementsTbody.addEventListener('click', async (e) => {
+        const target = e.target;
+        const action = target.dataset.action;
+        if (!action) return;
+        
+        e.preventDefault();
+        const row = target.closest('tr');
+        const id = row.dataset.id;
+
+        if (action === 'edit-announcement') {
+          const announcement = announcements.find(a => a.id == id);
+          announcementForm.querySelector('[name="id"]').value = announcement.id;
+          announcementForm.querySelector('[name="title"]').value = announcement.title;
+          announcementForm.querySelector('[name="content"]').value = announcement.content;
+          window.scrollTo(0, 0);
+        } else if (action === 'delete-announcement') {
+          if (confirm('Are you sure you want to delete this announcement?')) {
+            const { error } = await supabase.from('announcements').delete().eq('id', id);
+            if (error) {
+              alert('Error deleting announcement: ' + error.message);
+            } else {
+              fetchAndDisplayAnnouncements();
+            }
+          }
+        }
+      });
+
+      // --- 6. Handle Event Deletion ---
       eventsTbody.addEventListener('click', async (event) => {
-        const target = event.target as HTMLElement;
+        const target = event.target;
         if (target.dataset.action === 'delete') {
-          event.preventDefault(); // Prevent the link from navigating
+          event.preventDefault();
           const row = target.closest('tr');
           const eventId = row.dataset.eventId;
-
           if (confirm('Are you sure you want to delete this event?')) {
             const { error } = await supabase.from('events').delete().eq('id', eventId);
             if (error) {

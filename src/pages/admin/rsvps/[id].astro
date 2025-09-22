@@ -1,0 +1,115 @@
+
+// src/pages/admin/rsvps/[id].astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event RSVPs | Admin Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <main class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/admin">Admin Dashboard</a> / Event RSVPs</strong></li>
+      </ul>
+      <ul>
+        <li><a href="#" id="logout-button">Logout</a></li>
+      </ul>
+    </nav>
+
+    <h1 id="event-title">Loading...</h1>
+    <p><strong id="rsvp-count">0</strong> member(s) attending.</p>
+
+    <article>
+      <table id="rsvp-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Grade</th>
+          </tr>
+        </thead>
+        <tbody id="rsvp-tbody">
+          <tr><td colspan="2" aria-busy="true">Loading RSVPs...</td></tr>
+        </tbody>
+      </table>
+    </article>
+  </main>
+
+  <script>
+    import { createClient } from '@supabase/supabase-js';
+
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const eventId = window.location.pathname.split('/').pop();
+
+      const eventTitleEl = document.getElementById('event-title');
+      const rsvpCountEl = document.getElementById('rsvp-count');
+      const rsvpTbody = document.getElementById('rsvp-tbody');
+
+      // --- 1. Fetch Event and RSVP Data ---
+      async function fetchRsvpData() {
+        // Fetch event details and RSVP profiles in parallel
+        const [eventRes, rsvpsRes] = await Promise.all([
+          supabase.from('events').select('title').eq('id', eventId).single(),
+          supabase.from('rsvps').select('profiles(full_name, grade)').eq('event_id', eventId)
+        ]);
+
+        const { data: event, error: eventError } = eventRes;
+        const { data: rsvps, error: rsvpsError } = rsvpsRes;
+
+        if (eventError || rsvpsError) {
+          console.error("Error fetching data:", eventError || rsvpsError);
+          eventTitleEl.textContent = "Error";
+          rsvpTbody.innerHTML = '<tr><td colspan="2">Could not load RSVP data.</td></tr>';
+          return;
+        }
+
+        eventTitleEl.textContent = `RSVPs for: ${event.title}`;
+        rsvpCountEl.textContent = rsvps.length;
+
+        if (rsvps.length === 0) {
+          rsvpTbody.innerHTML = '<tr><td colspan="2">No one has RSVP\'d yet.</td></tr>';
+          return;
+        }
+
+        rsvpTbody.innerHTML = rsvps.map(rsvp => `
+          <tr>
+            <td>${rsvp.profiles.full_name}</td>
+            <td>${rsvp.profiles.grade}</td>
+          </tr>
+        `).join('');
+      }
+
+      // --- 2. Page Protection and Initial Load ---
+      async function checkAdminAndLoad() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { window.location.href = '/login'; return; }
+
+        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (!profile || !profile.is_admin) { window.location.href = '/'; return; }
+        
+        fetchRsvpData();
+      }
+
+      checkAdminAndLoad();
+
+      // --- 3. Handle Logout ---
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      });
+    }
+  </script>
+</body>
+</html>
