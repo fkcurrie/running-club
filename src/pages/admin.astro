@@ -1,10 +1,5 @@
 ---
 // src/pages/admin.astro
-import { supabase } from '../lib/supabase-client';
-
-const { data: settings } = await supabase.from('site_settings').select('value').eq('key', 'site_title').single();
-const siteTitle = settings?.value || "Running Club";
-
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
@@ -13,7 +8,7 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard | {siteTitle}</title>
+  <title>Admin Dashboard | Running Club</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
@@ -36,7 +31,6 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       <a href="/admin/announcements" role="button">Manage Announcements</a>
       <a href="/admin/events" role="button">Manage Events</a>
     </div>
-    <a href="/admin/settings" role="button" class="contrast">Site Settings</a>
   </main>
 
   <script>
