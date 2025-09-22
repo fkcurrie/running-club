@@ -8,41 +8,68 @@ Ce projet est le site web officiel du club de course de l'école Michelle O'Bons
 
 ## 2. Choix Technologiques
 
-*   **Hébergement :** [Render.com](https://render.com/) pour le déploiement continu et l'hébergement.
-*   **Framework Frontend :** [Astro](https://astro.build/) pour une construction de site statique rapide et moderne.
-*   **Backend & Base de Données :** [Supabase](https://supabase.com/) pour l'authentification, la base de données et les fonctions serverless.
+Pour répondre aux exigences d'hébergement gratuit, de sécurité et de maintenabilité à long terme, ce projet utilise une pile technologique moderne :
+
+*   **Hébergement :** [Render.com](https://render.com/)
+    *   **Raison :** Offre un excellent plan gratuit pour l'hébergement de sites statiques. Le déploiement est automatisé depuis un dépôt GitHub, ce qui simplifie le processus de mise à jour.
+
+*   **Framework Frontend :** [Astro](https://astro.build/)
+    *   **Raison :** Un générateur de sites statiques qui produit des sites web très rapides. Il permet de construire le site avec des composants réutilisables et de gérer le contenu via des fichiers simples (comme le Markdown), facilitant les mises à jour pour les utilisateurs non techniques.
+
+*   **Backend & Base de Données :** [Supabase](https://supabase.com/)
+    *   **Raison :** Une plateforme Backend-as-a-Service qui fournit une base de données PostgreSQL sécurisée et un système d'authentification complet. Supabase gérera l'inscription des utilisateurs, la validation par courriel et les connexions, garantissant que les données des élèves sont stockées en toute sécurité. Le futur administrateur pourra consulter la liste des membres via un tableau de bord convivial.
 
 ---
 
-## 3. Configuration du Développement Local
+## 3. Fonctionnalités
+
+*   **Inscription en Ligne :** Les élèves peuvent créer un compte. Un courriel de confirmation sera envoyé à leur adresse scolaire pour validation.
+*   **Connexion Sécurisée :** Les membres peuvent se connecter pour accéder au contenu privé du club.
+*   **Calendrier des Événements :** Une page protégée, visible uniquement par les membres connectés, affichera le calendrier des entraînements et des courses.
+*   **Gestion des Membres :** Les administrateurs peuvent consulter la liste des membres inscrits dans le tableau de bord Supabase.
+
+---
+
+## 4. Sécurité et Confidentialité
+
+La sécurité est gérée par Supabase, un fournisseur de confiance :
+
+1.  **Authentification :** Le processus d'inscription et de connexion est entièrement géré par Supabase Auth, qui inclut la validation par courriel et la gestion sécurisée des mots de passe.
+2.  **Stockage des Données :** Les informations des élèves sont stockées dans une base de données PostgreSQL sécurisée, hébergée par Supabase.
+3.  **Contrôle d'Accès :** Le contenu sensible (comme le calendrier complet) ne sera accessible qu'aux utilisateurs authentifiés.
+
+---
+
+## 5. Configuration du Développement Local
 
 Pour exécuter ce projet sur votre machine locale, suivez ces étapes.
 
 ### Prérequis
 
-*   [Node.js](https://nodejs.org/) (v22.17.0 ou supérieure est spécifiée dans `package.json`).
-*   [npm](https://www.npmjs.com/) (fourni avec Node.js).
-*   [Supabase CLI](https://supabase.com/docs/guides/cli) installée sur votre machine.
+*   [Node.js](https://nodejs.org/) (v22.17.0 ou supérieure)
+*   [npm](https://www.npmjs.com/) (fourni avec Node.js)
 
 ### Étapes
 
 1.  **Clonez le Dépôt :**
     ```bash
     git clone https://github.com/fkcurrie/running-club.git
+    ```
+
+2.  **Naviguez vers le Répertoire du Projet :**
+    ```bash
     cd running-club-site
     ```
 
-2.  **Installez les Dépendances :**
+3.  **Installez les Dépendances :**
     ```bash
     npm install
     ```
 
-3.  **Configurez le Backend Supabase :**
-    *   Suivez le guide [Configuration du Backend (Supabase)](#4-configuration-du-backend-supabase) ci-dessous pour créer votre propre projet Supabase et configurer la base de données et les fonctions.
-
 4.  **Configurez les Variables d'Environnement :**
-    *   Créez un nouveau fichier nommé `.env` à la racine du projet.
-    *   Ajoutez l'URL de votre projet Supabase et votre clé anonyme à ce fichier. Vous pouvez les obtenir depuis votre tableau de bord Supabase sous `Project Settings > API`.
+    *   Créez un nouveau fichier nommé `.env` à la racine du répertoire `running-club-site`.
+    *   Vous devrez obtenir l'URL de votre projet et votre clé anonyme depuis le tableau de bord de votre projet Supabase, sous `Project Settings > API`.
+    *   Ajoutez le contenu suivant au fichier `.env`, en remplaçant les valeurs d'exemple :
         ```
         # Supabase Credentials
         PUBLIC_SUPABASE_URL=[VOTRE_URL_SUPABASE]
@@ -50,140 +77,11 @@ Pour exécuter ce projet sur votre machine locale, suivez ces étapes.
         ```
 
 5.  **Lancez le Serveur de Développement :**
-    ```bash
-    npm run dev -- --host
-    ```
+    *   Ce projet nécessite l'option `--host` pour être accessible sur votre réseau local.
+    *   Exécutez la commande suivante :
+        ```bash
+        npm run dev -- --host
+        ```
 
 6.  **Accédez au Site :**
-    *   Le serveur sera maintenant en cours d'exécution. Vous pouvez y accéder dans votre navigateur à l'adresse `http://<votre-adresse-ip-locale>:4173`.
-
----
-
-## 4. Configuration du Backend (Supabase)
-
-Ce projet dépend de Supabase pour son backend. Pour créer votre propre instance, suivez ces instructions.
-
-### 4.1. Création du Projet
-
-1.  Allez sur [supabase.com](https://supabase.com) et créez un nouveau projet.
-2.  Gardez le tableau de bord du projet ouvert, car vous aurez besoin de certaines informations.
-
-### 4.2. Schéma de la Base de Données
-
-Le schéma complet de la base de données, y compris les tables, les politiques de sécurité au niveau des lignes (RLS) et les déclencheurs, peut être configuré avec un seul script.
-
-1.  Dans votre projet Supabase, naviguez vers l'**Éditeur SQL**.
-2.  Cliquez sur **"New query"**.
-3.  Copiez tout le contenu du script ci-dessous et collez-le dans l'éditeur SQL.
-4.  **IMPORTANT :** Dans la fonction `handle_new_user` du script, changez l'adresse e-mail de l'espace réservé `'votre-email-admin@example.com'` par l'adresse que vous souhaitez désigner comme premier administrateur du site.
-5.  Cliquez sur **"Run"**.
-
-```sql
--- 1. TABLE DES PROFILS
-CREATE TABLE public.profiles (
-  id UUID NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name TEXT,
-  grade INT,
-  email TEXT,
-  is_admin BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Les profils publics sont visibles par tous." ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Les utilisateurs peuvent mettre à jour leur propre profil." ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Les admins peuvent gérer tous les profils." ON public.profiles FOR ALL USING ((SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true);
-
--- 2. FONCTION POUR CRÉER UN PROFIL POUR UN NOUVEL UTILISATEUR
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, grade, email, is_admin)
-  VALUES (
-    new.id,
-    new.raw_user_meta_data->>'full_name',
-    (new.raw_user_meta_data->>'grade')::INT,
-    new.email,
-    false
-  );
-  -- Définir l'utilisateur admin initial s'il correspond à l'e-mail spécifié
-  IF new.email = 'votre-email-admin@example.com' THEN
-    UPDATE public.profiles SET is_admin = true WHERE id = new.id;
-  END IF;
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 3. DÉCLENCHEUR POUR LA FONCTION DE NOUVEL UTILISATEUR
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
--- 4. TABLE DES ÉVÉNEMENTS
-CREATE TABLE public.events (
-  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  event_type TEXT,
-  title TEXT,
-  event_date TIMESTAMPTZ,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permettre aux utilisateurs authentifiés de voir les événements" ON public.events FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Permettre aux admins de gérer les événements" ON public.events FOR ALL TO authenticated USING ((SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true);
-
--- 5. TABLE DES ANNONCES
-CREATE TABLE public.announcements (
-  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  title TEXT NOT NULL,
-  content TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permettre aux utilisateurs authentifiés de voir les annonces" ON public.announcements FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Permettre aux admins de gérer les annonces" ON public.announcements FOR ALL TO authenticated USING ((SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true);
-
--- 6. TABLE DES RSVPS
-CREATE TABLE public.rsvps (
-  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  event_id BIGINT REFERENCES public.events(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (event_id, user_id)
-);
-ALTER TABLE public.rsvps ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permettre aux utilisateurs de gérer leurs propres RSVPs" ON public.rsvps FOR ALL TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Permettre aux admins de voir tous les RSVPs" ON public.rsvps FOR SELECT TO authenticated USING ((SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true);
-```
-
-### 4.3. Configuration des Edge Functions
-
-Les fonctionnalités d'administration reposent sur deux Edge Functions serverless. Pour les déployer, exécutez les commandes suivantes depuis le répertoire `running-club-site`.
-
-1.  **Connectez-vous à la CLI Supabase :**
-    ```bash
-    npx supabase login
-    ```
-
-2.  **Liez votre projet :**
-    *   Remplacez `[VOTRE-ID-PROJET]` par l'ID de votre projet Supabase.
-    ```bash
-    npx supabase link --project-ref [VOTRE-ID-PROJET]
-    ```
-
-3.  **Définissez la Clé de Service (Service Role Key) :**
-    *   D'abord, créez un fichier à `supabase/.env`.
-    *   Ajoutez-y une ligne : `CUSTOM_SERVICE_ROLE_KEY=[VOTRE-CLE-SERVICE-ROLE-ICI]`.
-    *   Remplacez le texte d'exemple par la clé `service_role` que vous trouverez dans les paramètres API de votre projet Supabase.
-    *   Ensuite, exécutez la commande suivante pour téléverser le secret en toute sécurité :
-    ```bash
-    npx supabase secrets set --env-file ./supabase/.env
-    ```
-
-4.  **Déployez les fonctions :**
-    ```bash
-    npx supabase functions deploy manage-user
-    npx supabase functions deploy manage-content
-    ```
-
-Votre backend est maintenant entièrement configuré.
+    *   Le serveur est maintenant en cours d'exécution. Vous pouvez y accéder dans votre navigateur à l'adresse `http://<votre-adresse-ip-locale>:4173`.
