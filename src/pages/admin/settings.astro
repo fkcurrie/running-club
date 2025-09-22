@@ -1,0 +1,105 @@
+---
+// src/pages/admin/settings.astro
+import { supabase } from '../../lib/supabase-client';
+
+const { data: settings } = await supabase.from('site_settings').select('value').eq('key', 'site_title').single();
+const siteTitle = settings?.value || "Running Club";
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site Settings | {siteTitle}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <main class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/admin">Admin Dashboard</a> / Site Settings</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/schedule">View Schedule</a></li>
+        <li><a href="#" id="logout-button">Logout</a></li>
+      </ul>
+    </nav>
+
+    <h1>Site Settings</h1>
+    <p>Changes made here will be reflected across the entire public website.</p>
+
+    <article>
+      <form id="settings-form">
+        <label for="site_title">Site Title</label>
+        <input type="text" id="site_title" name="site_title" required>
+        
+        <label for="site_description">Site Description</label>
+        <textarea id="site_description" name="site_description" required></textarea>
+        
+        <button type="submit">Save Settings</button>
+      </form>
+    </article>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const form = document.getElementById('settings-form');
+      const titleInput = document.getElementById('site_title');
+      const descriptionInput = document.getElementById('site_description');
+
+      async function fetchSettings() {
+        const { data, error } = await supabase.from('site_settings').select('*');
+        if (error) return console.error('Error fetching settings:', error);
+        
+        const settings = data.reduce((acc, { key, value }) => ({ ...acc, [key]: value }), {});
+        titleInput.value = settings.site_title || '';
+        descriptionInput.value = settings.site_description || '';
+      }
+
+      async function checkAdminAndLoad() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { window.location.href = '/login'; return; }
+        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (!profile || !profile.is_admin) { window.location.href = '/'; return; }
+        fetchSettings();
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newSettings = [
+          { key: 'site_title', value: titleInput.value },
+          { key: 'site_description', value: descriptionInput.value }
+        ];
+        
+        // Supabase upsert will insert or update rows as needed
+        const { error } = await supabase.from('site_settings').upsert(newSettings);
+
+        if (error) {
+          alert('Error saving settings: ' + error.message);
+        } else {
+          alert('Settings saved successfully!');
+        }
+      });
+
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      });
+
+      checkAdminAndLoad();
+    }
+  </script>
+</body>
+</html>
