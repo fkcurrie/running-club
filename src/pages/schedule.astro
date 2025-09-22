@@ -43,9 +43,8 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
     </article>
   </main>
 
-  <script>
-    import { createClient } from '@supabase/supabase-js';
-    import type { Event } from '../lib/types';
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
     const body = document.querySelector('body');
     const supabaseUrl = body.dataset.supabaseUrl;
@@ -55,36 +54,42 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       console.error("Supabase credentials not found in the DOM.");
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
       const adminLink = document.getElementById('admin-link');
       const practicesList = document.getElementById('practices-list');
       const racesList = document.getElementById('races-list');
       let currentUser = null;
 
-      // --- 1. Fetch and Display Events and RSVPs ---
+      function generateIcs(event) {
+        const startDate = new Date(event.event_date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        const endDate = new Date(new Date(event.event_date).getTime() + 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        const icsContent = [
+          'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
+          `UID:${event.id}@michelles.running.club`,
+          `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`, 
+          `DTSTART:${startDate}`, `DTEND:${endDate}`,
+          `SUMMARY:${event.title}`,
+          `DESCRIPTION:${event.description || ''}`,
+          'END:VEVENT', 'END:VCALENDAR'
+        ].join('\n');
+        return `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+      }
+
       async function fetchAndDisplayEvents() {
-        // Fetch events and RSVPs in parallel
         const [eventsRes, rsvpsRes] = await Promise.all([
           supabase.from('events').select('*').order('event_date', { ascending: true }),
           supabase.from('rsvps').select('event_id').eq('user_id', currentUser.id)
         ]);
 
-        const { data: events, error: eventsError } = eventsRes;
-        const { data: rsvps, error: rsvpsError } = rsvpsRes;
-
-        if (eventsError || rsvpsError) {
-          console.error("Error fetching data:", eventsError || rsvpsError);
+        if (eventsRes.error || rsvpsRes.error) {
           practicesList.innerHTML = '<p>Could not load schedule.</p>';
-          racesList.innerHTML = '<p></p>'; // Clear other list
-          return;
+          racesList.innerHTML = '';
+          return console.error("Error fetching data:", eventsRes.error || rsvpsRes.error);
         }
 
-        const rsvpEventIds = new Set(rsvps.map(r => r.event_id));
+        const rsvpEventIds = new Set(rsvpsRes.data.map(r => r.event_id));
+        const practices = eventsRes.data.filter(e => e.event_type === 'Practice');
+        const races = eventsRes.data.filter(e => e.event_type === 'Race');
 
-        const practices = events.filter(e => e.event_type === 'Practice');
-        const races = events.filter(e => e.event_type === 'Race');
-
-        // --- Helper to render event lists ---
         const renderList = (element, eventList) => {
           if (eventList.length > 0) {
             element.innerHTML = `<ul>${eventList.map((event) => `
@@ -103,7 +108,7 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
               </li>
             `).join('')}</ul>`;
           } else {
-            element.innerHTML = `<p>No new ${element.id.split('-')[0]} scheduled. Check back soon!</p>`;
+            element.innerHTML = `<p>No new ${element.id.includes('practice') ? 'practices' : 'races'} scheduled. Check back soon!</p>`;
           }
         };
 
@@ -111,30 +116,6 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
         renderList(racesList, races);
       }
 
-      // --- Helper to generate .ics file content ---
-      function generateIcs(event) {
-        const startDate = new Date(event.event_date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        // Assume event is 1 hour long for simplicity
-        const endDate = new Date(new Date(event.event_date).getTime() + 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        
-        const icsContent = [
-          'BEGIN:VCALENDAR',
-          'VERSION:2.0',
-          'BEGIN:VEVENT',
-          `UID:${event.id}@michelles.running.club`,
-          `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`,
-          `DTSTART:${startDate}`,
-          `DTEND:${endDate}`,
-          `SUMMARY:${event.title}`,
-          `DESCRIPTION:${event.description || ''}`,
-          'END:VEVENT',
-          'END:VCALENDAR'
-        ].join('\\n');
-
-        return `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
-      }
-
-      // --- 2. Handle RSVP Clicks ---
       document.addEventListener('click', async (event) => {
         const target = event.target;
         const action = target.dataset.action;
@@ -143,48 +124,28 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
         event.preventDefault();
         const controlsDiv = target.closest('.rsvp-controls');
         const eventId = controlsDiv.dataset.eventId;
-
         controlsDiv.innerHTML = '<p aria-busy="true" style="margin-bottom: 0;">Updating...</p>';
 
         if (action === 'rsvp') {
-          const { error } = await supabase.from('rsvps').insert({
-            event_id: eventId,
-            user_id: currentUser.id,
-          });
-          if (error) console.error('Error RSVPing:', error);
+          await supabase.from('rsvps').insert({ event_id: eventId, user_id: currentUser.id });
         } else if (action === 'cancel') {
-          const { error } = await supabase.from('rsvps')
-            .delete()
-            .eq('event_id', eventId)
-            .eq('user_id', currentUser.id);
-          if (error) console.error('Error canceling RSVP:', error);
+          await supabase.from('rsvps').delete().eq('event_id', eventId).eq('user_id', currentUser.id);
         }
-
-        // Refresh the list to show the change
         fetchAndDisplayEvents();
       });
 
-      // --- 3. Protect the page and check for admin status ---
       async function checkSessionAndLoadData() {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          window.location.href = '/login';
-          return;
-        }
+        if (!user) { window.location.href = '/login'; return; }
         currentUser = user;
-
         fetchAndDisplayEvents();
-
         const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-        if (profile && profile.is_admin) {
-          adminLink.style.display = 'block';
-        }
+        if (profile && profile.is_admin) adminLink.style.display = 'block';
       }
+      
       checkSessionAndLoadData();
 
-      // --- 4. Handle Logout ---
-      const logoutButton = document.getElementById('logout-button');
-      logoutButton.addEventListener('click', async () => {
+      document.getElementById('logout-button').addEventListener('click', async () => {
         await supabase.auth.signOut();
         window.location.href = '/';
       });

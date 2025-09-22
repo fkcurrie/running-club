@@ -23,132 +23,18 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       </ul>
     </nav>
 
-    <article>
-      <h2>Manage Announcements</h2>
-      <form id="announcement-form">
-        <input type="hidden" name="id">
-        <label for="title">Title</label>
-        <input type="text" id="announcement-title" name="title" required>
-        <label for="content">Content</label>
-        <textarea id="announcement-content" name="content" required></textarea>
-        <button type="submit">Save Announcement</button>
-        <button type="reset" class="secondary">Clear Form</button>
-      </form>
-      <details>
-        <summary role="button" class="secondary">Import Announcements</summary>
-        <article>
-          <p>Upload a CSV file with the columns <code>title,content</code> to create multiple announcements at once.</p>
-          <form id="bulk-import-announcements-form">
-            <label for="announcements-csv-file">CSV File</label>
-            <input type="file" id="announcements-csv-file" accept=".csv" required>
-            <button type="submit">Import from CSV</button>
-          </form>
-          <pre id="announcements-import-results" style="display: none;"></pre>
-        </article>
-        <article>
-          <p>Or, import from a published Google Sheet URL.</p>
-          <form id="google-sheet-import-announcements-form">
-            <label for="announcements-sheet-url">Published Google Sheet URL</label>
-            <input type="url" id="announcements-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
-            <button type="submit">Import from Sheet</button>
-          </form>
-          <pre id="announcements-sheet-import-results" style="display: none;"></pre>
-        </article>
-      </details>
-    </article>
+    <h1>Admin Dashboard</h1>
+    <p>Select a category to manage.</p>
 
-    <article>
-      <h3>Existing Announcements</h3>
-      <table id="announcements-table">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="announcements-tbody">
-          <tr><td colspan="3" aria-busy="true">Loading...</td></tr>
-        </tbody>
-      </table>
-    </article>
-
-    <hr>
-
-    <h1>Manage Events</h1>
-
-    <a href="/admin/members" role="button" class="secondary">Manage Members</a>
-
-    <article>
-      <h2>Add New Event</h2>
-      <form id="add-event-form">
-        <div class="grid">
-          <label for="event_type">
-            Event Type
-            <select id="event_type" name="event_type" required>
-              <option value="Practice">Practice</option>
-              <option value="Race">Race</option>
-            </select>
-          </label>
-          <label for="title">
-            Title
-            <input type="text" id="title" name="title" placeholder="e.g., Track Workout" required>
-          </label>
-        </div>
-        
-        <label for="event_date">Date and Time</label>
-        <input type="datetime-local" id="event_date" name="event_date" required>
-
-        <label for="description">Description</label>
-        <textarea id="description" name="description" placeholder="e.g., Meet at the south entrance of the track."></textarea>
-
-        <button type="submit">Add Event</button>
-      </form>
-      <details>
-        <summary role="button" class="secondary">Import Events</summary>
-        <article>
-          <p>Upload a CSV file with the columns <code>event_type,title,event_date,description</code> to create multiple events at once. The <code>event_date</code> must be in a valid ISO 8601 format (e.g., <code>2025-10-21T15:30:00</code>).</p>
-          <form id="bulk-import-events-form">
-            <label for="events-csv-file">CSV File</label>
-            <input type="file" id="events-csv-file" accept=".csv" required>
-            <button type="submit">Import from CSV</button>
-          </form>
-          <pre id="events-import-results" style="display: none;"></pre>
-        </article>
-        <article>
-          <p>Or, import from a published Google Sheet URL.</p>
-          <form id="google-sheet-import-events-form">
-            <label for="events-sheet-url">Published Google Sheet URL</label>
-            <input type="url" id="events-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
-            <button type="submit">Import from Sheet</button>
-          </form>
-          <pre id="events-sheet-import-results" style="display: none;"></pre>
-        </article>
-      </details>
-    </article>
-
-    <article>
-      <h2>Existing Events</h2>
-      <table id="events-table">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Title</th>
-            <th>Date</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="events-tbody">
-          <!-- Events will be loaded here by the script -->
-          <tr><td colspan="4" aria-busy="true">Loading events...</td></tr>
-        </tbody>
-      </table>
-    </article>
+    <div class="grid">
+      <a href="/admin/members" role="button">Manage Members</a>
+      <a href="/admin/announcements" role="button">Manage Announcements</a>
+      <a href="/admin/events" role="button">Manage Events</a>
+    </div>
   </main>
 
   <script>
     import { createClient } from '@supabase/supabase-js';
-    import type { Event } from '../lib/types';
 
     const body = document.querySelector('body');
     const supabaseUrl = body.dataset.supabaseUrl;
@@ -158,212 +44,29 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       console.error("Supabase credentials not found in the DOM.");
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      const eventsTbody = document.getElementById('events-tbody');
-      const announcementsTbody = document.getElementById('announcements-tbody');
-      const announcementForm = document.getElementById('announcement-form');
-      let announcements = []; // Cache announcements
 
-      // --- 1. Fetch and Display Data ---
-      async function fetchData() {
-        fetchAndDisplayEvents();
-        fetchAndDisplayAnnouncements();
-      }
-
-      async function fetchAndDisplayAnnouncements() {
-        const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
-        if (error) {
-          console.error("Error fetching announcements:", error);
-          announcementsTbody.innerHTML = '<tr><td colspan="3">Error loading announcements.</td></tr>';
-          return;
-        }
-        announcements = data;
-        renderAnnouncements();
-      }
-      
-      function renderAnnouncements() {
-        if (announcements.length === 0) {
-          announcementsTbody.innerHTML = '<tr><td colspan="3">No announcements yet.</td></tr>';
-          return;
-        }
-        announcementsTbody.innerHTML = announcements.map(item => `
-          <tr data-id="${item.id}">
-            <td>${item.title}</td>
-            <td>${new Date(item.created_at).toLocaleDateString()}</td>
-            <td>
-              <a href="#" data-action="edit-announcement">Edit</a> | 
-              <a href="#" data-action="delete-announcement" style="color: var(--pico-color-red-500);">Delete</a>
-            </td>
-          </tr>
-        `).join('');
-      }
-
-      async function fetchAndDisplayEvents() {
-        const { data: events, error } = await supabase.from('events').select('*').order('event_date', { ascending: true });
-        if (error) {
-          console.error("Error fetching events:", error);
-          eventsTbody.innerHTML = '<tr><td colspan="4">Error loading events.</td></tr>';
-          return;
-        }
-        if (events.length === 0) {
-          eventsTbody.innerHTML = '<tr><td colspan="4">No events found. Add one above!</td></tr>';
-          return;
-        }
-        eventsTbody.innerHTML = events.map((event) => `
-          <tr data-event-id="${event.id}">
-            <td>${event.event_type}</td>
-            <td>${event.title}</td>
-            <td>${new Date(event.event_date).toLocaleString()}</td>
-            <td style="text-align: center; white-space: nowrap;">
-              <a href="/admin/rsvps/${event.id}" title="View RSVPs" class="contrast" style="text-decoration: none; margin-right: 1rem;">👥</a>
-              <a href="/admin/edit/${event.id}" title="Edit" class="contrast" style="text-decoration: none; margin-right: 1rem;">✏️</a>
-              <a href="#" title="Delete" data-action="delete" class="contrast" style="text-decoration: none; color: var(--pico-color-red-500);">🗑️</a>
-            </td>
-          </tr>
-        `).join('');
-      }
-
-      // --- 2. Page Protection and Data Loading ---
-      async function checkAdminStatusAndLoadData() {
+      async function checkAdminStatus() {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { window.location.href = '/login'; return; }
-        const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (!user) {
+          window.location.href = '/login';
+          return;
+        }
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
         if (error || !profile || !profile.is_admin) {
           console.error('Admin access denied.');
           window.location.href = '/';
-          return;
         }
-        fetchData();
       }
-      checkAdminStatusAndLoadData();
+      checkAdminStatus();
 
-      // --- 3. Handle Logout ---
       document.getElementById('logout-button').addEventListener('click', async () => {
         await supabase.auth.signOut();
         window.location.href = '/';
       });
-
-      // --- 4. Handle Announcement Form ---
-      announcementForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(announcementForm);
-        const id = formData.get('id');
-        const announcement = {
-          title: formData.get('title'),
-          content: formData.get('content'),
-        };
-
-        let error;
-        if (id) {
-          // Update existing
-          ({ error } = await supabase.from('announcements').update(announcement).eq('id', id));
-        } else {
-          // Insert new
-          ({ error } = await supabase.from('announcements').insert(announcement));
-        }
-
-        if (error) {
-          alert('Error saving announcement: ' + error.message);
-        } else {
-          announcementForm.reset();
-          fetchAndDisplayAnnouncements();
-        }
-      });
-
-      announcementForm.addEventListener('reset', () => {
-        announcementForm.querySelector('[name="id"]').value = '';
-      });
-
-      // --- 5. Handle Announcement Table Actions ---
-      announcementsTbody.addEventListener('click', async (e) => {
-        const target = e.target;
-        const action = target.dataset.action;
-        if (!action) return;
-        
-        e.preventDefault();
-        const row = target.closest('tr');
-        const id = row.dataset.id;
-
-        if (action === 'edit-announcement') {
-          const announcement = announcements.find(a => a.id == id);
-          announcementForm.querySelector('[name="id"]').value = announcement.id;
-          announcementForm.querySelector('[name="title"]').value = announcement.title;
-          announcementForm.querySelector('[name="content"]').value = announcement.content;
-          window.scrollTo(0, 0);
-        } else if (action === 'delete-announcement') {
-          if (confirm('Are you sure you want to delete this announcement?')) {
-            const { error } = await supabase.from('announcements').delete().eq('id', id);
-            if (error) {
-              alert('Error deleting announcement: ' + error.message);
-            } else {
-              fetchAndDisplayAnnouncements();
-            }
-          }
-        }
-      });
-
-      // --- 6. Handle Event Deletion ---
-      eventsTbody.addEventListener('click', async (event) => {
-        const target = event.target;
-        if (target.dataset.action === 'delete') {
-          event.preventDefault();
-          const row = target.closest('tr');
-          const eventId = row.dataset.eventId;
-          if (confirm('Are you sure you want to delete this event?')) {
-            const { error } = await supabase.from('events').delete().eq('id', eventId);
-            if (error) {
-              alert('Error deleting event: ' + error.message);
-            } else {
-              row.remove();
-            }
-          }
-        }
-      });
-
-      // --- 7. Handle Bulk Imports ---
-      function setupImportForm(formId, fileInputId, resultsAreaId, action, payloadKey) {
-        const form = document.getElementById(formId);
-        const resultsArea = document.getElementById(resultsAreaId);
-
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          resultsArea.style.display = 'block';
-          resultsArea.textContent = 'Importing...';
-
-          let payload = {};
-          if (payloadKey === 'csvText') {
-            const file = document.getElementById(fileInputId).files[0];
-            if (!file) { alert('Please select a file.'); return; }
-            const csvText = await file.text();
-            payload = { csvText };
-          } else {
-            const sheetUrl = document.getElementById(fileInputId).value;
-            if (!sheetUrl) { alert('Please enter a URL.'); return; }
-            payload = { sheetUrl };
-          }
-
-          const { data, error } = await supabase.functions.invoke('manage-content', {
-            method: 'POST',
-            body: { action, payload },
-          });
-
-          if (error) {
-            resultsArea.textContent = `Error: ${error.message}`;
-          } else {
-            const { successful, failed } = data;
-            let resultsText = `Import Complete!\n\nSuccessful (${successful.length}):\n`;
-            resultsText += successful.map(s => `- ${s.title || s.event_type}`).join('\n');
-            resultsText += `\n\nFailed (${failed.length}):\n`;
-            resultsText += failed.map(f => `- ${f.record.title || f.record.event_type}: ${f.error}`).join('\n');
-            resultsArea.textContent = resultsText;
-            fetchData(); // Refresh lists
-          }
-        });
-      }
-
-      setupImportForm('bulk-import-announcements-form', 'announcements-csv-file', 'announcements-import-results', 'bulk_import_announcements_csv', 'csvText');
-      setupImportForm('google-sheet-import-announcements-form', 'announcements-sheet-url', 'announcements-sheet-import-results', 'bulk_import_announcements_sheet', 'sheetUrl');
-      setupImportForm('bulk-import-events-form', 'events-csv-file', 'events-import-results', 'bulk_import_events_csv', 'csvText');
-      setupImportForm('google-sheet-import-events-form', 'events-sheet-url', 'events-sheet-import-results', 'bulk_import_events_sheet', 'sheetUrl');
     }
   </script>
 </body>

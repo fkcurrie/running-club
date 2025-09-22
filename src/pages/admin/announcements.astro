@@ -1,0 +1,242 @@
+
+---
+// src/pages/admin/announcements.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Announcements | Admin Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <main class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/admin">Admin Dashboard</a> / Manage Announcements</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/schedule">View Schedule</a></li>
+        <li><a href="#" id="logout-button">Logout</a></li>
+      </ul>
+    </nav>
+
+    <h1>Manage Announcements</h1>
+
+    <article>
+      <h2>Create/Edit Announcement</h2>
+      <form id="announcement-form">
+        <input type="hidden" name="id">
+        <label for="title">Title</label>
+        <input type="text" id="announcement-title" name="title" required>
+        <label for="content">Content</label>
+        <textarea id="announcement-content" name="content" required></textarea>
+        <button type="submit">Save Announcement</button>
+        <button type="reset" class="secondary">Clear Form</button>
+      </form>
+    </article>
+
+    <details>
+      <summary role="button" class="secondary">Import Announcements</summary>
+      <article>
+        <p>Upload a CSV file with the columns <code>title,content</code> to create multiple announcements at once.</p>
+        <form id="bulk-import-announcements-form">
+          <label for="announcements-csv-file">CSV File</label>
+          <input type="file" id="announcements-csv-file" accept=".csv" required>
+          <button type="submit">Import from CSV</button>
+        </form>
+        <pre id="announcements-import-results" style="display: none;"></pre>
+      </article>
+      <article>
+        <p>Or, import from a published Google Sheet URL.</p>
+        <form id="google-sheet-import-announcements-form">
+          <label for="announcements-sheet-url">Published Google Sheet URL</label>
+          <input type="url" id="announcements-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
+          <button type="submit">Import from Sheet</button>
+        </form>
+        <pre id="announcements-sheet-import-results" style="display: none;"></pre>
+      </article>
+    </details>
+
+    <article>
+      <h3>Existing Announcements</h3>
+      <table id="announcements-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="announcements-tbody">
+          <tr><td colspan="3" aria-busy="true">Loading...</td></tr>
+        </tbody>
+      </table>
+    </article>
+  </main>
+
+  <script>
+    import { createClient } from '@supabase/supabase-js';
+
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const announcementsTbody = document.getElementById('announcements-tbody');
+      const announcementForm = document.getElementById('announcement-form');
+      let announcements = []; // Cache announcements
+
+      async function fetchAndDisplayAnnouncements() {
+        const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+        if (error) {
+          console.error("Error fetching announcements:", error);
+          announcementsTbody.innerHTML = '<tr><td colspan="3">Error loading announcements.</td></tr>';
+          return;
+        }
+        announcements = data;
+        renderAnnouncements();
+      }
+      
+      function renderAnnouncements() {
+        if (announcements.length === 0) {
+          announcementsTbody.innerHTML = '<tr><td colspan="3">No announcements yet.</td></tr>';
+          return;
+        }
+        announcementsTbody.innerHTML = announcements.map(item => `
+          <tr data-id="${item.id}">
+            <td>${item.title}</td>
+            <td>${new Date(item.created_at).toLocaleDateString()}</td>
+            <td>
+              <a href="#" data-action="edit-announcement">Edit</a> | 
+              <a href="#" data-action="delete-announcement" style="color: var(--pico-color-red-500);">Delete</a>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      async function checkAdminStatusAndLoadData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { window.location.href = '/login'; return; }
+        const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (error || !profile || !profile.is_admin) {
+          console.error('Admin access denied.');
+          window.location.href = '/';
+          return;
+        }
+        fetchAndDisplayAnnouncements();
+      }
+      checkAdminStatusAndLoadData();
+
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      });
+
+      announcementForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(announcementForm);
+        const id = formData.get('id');
+        const announcement = {
+          title: formData.get('title'),
+          content: formData.get('content'),
+        };
+
+        let error;
+        if (id) {
+          ({ error } = await supabase.from('announcements').update(announcement).eq('id', id));
+        } else {
+          ({ error } = await supabase.from('announcements').insert(announcement));
+        }
+
+        if (error) {
+          alert('Error saving announcement: ' + error.message);
+        } else {
+          announcementForm.reset();
+          fetchAndDisplayAnnouncements();
+        }
+      });
+
+      announcementForm.addEventListener('reset', () => {
+        announcementForm.querySelector('[name="id"]').value = '';
+      });
+
+      announcementsTbody.addEventListener('click', async (e) => {
+        const target = e.target;
+        const action = target.dataset.action;
+        if (!action) return;
+        
+        e.preventDefault();
+        const row = target.closest('tr');
+        const id = row.dataset.id;
+
+        if (action === 'edit-announcement') {
+          const announcement = announcements.find(a => a.id == id);
+          announcementForm.querySelector('[name="id"]').value = announcement.id;
+          announcementForm.querySelector('[name="title"]').value = announcement.title;
+          announcementForm.querySelector('[name="content"]').value = announcement.content;
+          window.scrollTo(0, 0);
+        } else if (action === 'delete-announcement') {
+          if (confirm('Are you sure you want to delete this announcement?')) {
+            const { error } = await supabase.from('announcements').delete().eq('id', id);
+            if (error) {
+              alert('Error deleting announcement: ' + error.message);
+            } else {
+              fetchAndDisplayAnnouncements();
+            }
+          }
+        }
+      });
+
+      function setupImportForm(formId, fileInputId, resultsAreaId, action, payloadKey) {
+        const form = document.getElementById(formId);
+        const resultsArea = document.getElementById(resultsAreaId);
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          resultsArea.style.display = 'block';
+          resultsArea.textContent = 'Importing...';
+
+          let payload = {};
+          if (payloadKey === 'csvText') {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) { alert('Please select a file.'); return; }
+            const csvText = await file.text();
+            payload = { csvText };
+          } else {
+            const sheetUrl = document.getElementById(fileInputId).value;
+            if (!sheetUrl) { alert('Please enter a URL.'); return; }
+            payload = { sheetUrl };
+          }
+
+          const { data, error } = await supabase.functions.invoke('manage-content', {
+            method: 'POST',
+            body: { action, payload },
+          });
+
+          if (error) {
+            resultsArea.textContent = `Error: ${error.message}`;
+          } else {
+            const { successful, failed } = data;
+            let resultsText = `Import Complete!\n\nSuccessful (${successful.length}):\n`;
+            resultsText += successful.map(s => `- ${s.title || s.event_type}`).join('\n');
+            resultsText += `\n\nFailed (${failed.length}):\n`;
+            resultsText += failed.map(f => `- ${f.record.title || f.record.event_type}: ${f.error}`).join('\n');
+            resultsArea.textContent = resultsText;
+            fetchAndDisplayAnnouncements();
+          }
+        });
+      }
+
+      setupImportForm('bulk-import-announcements-form', 'announcements-csv-file', 'announcements-import-results', 'bulk_import_announcements_csv', 'csvText');
+      setupImportForm('google-sheet-import-announcements-form', 'announcements-sheet-url', 'announcements-sheet-import-results', 'bulk_import_announcements_sheet', 'sheetUrl');
+    }
+  </script>
+</body>
+</html>

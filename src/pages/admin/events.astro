@@ -1,0 +1,227 @@
+
+---
+// src/pages/admin/events.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Events | Admin Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <main class="container">
+    <nav>
+      <ul>
+        <li><strong><a href="/admin">Admin Dashboard</a> / Manage Events</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/schedule">View Schedule</a></li>
+        <li><a href="#" id="logout-button">Logout</a></li>
+      </ul>
+    </nav>
+
+    <h1>Manage Events</h1>
+
+    <article>
+      <h2>Add New Event</h2>
+      <form id="add-event-form">
+        <div class="grid">
+          <label for="event_type">
+            Event Type
+            <select id="event_type" name="event_type" required>
+              <option value="Practice">Practice</option>
+              <option value="Race">Race</option>
+            </select>
+          </label>
+          <label for="title">
+            Title
+            <input type="text" id="title" name="title" placeholder="e.g., Track Workout" required>
+          </label>
+        </div>
+        <label for="event_date">Date and Time</label>
+        <input type="datetime-local" id="event_date" name="event_date" required>
+        <label for="description">Description</label>
+        <textarea id="description" name="description" placeholder="e.g., Meet at the south entrance of the track."></textarea>
+        <button type="submit">Add Event</button>
+      </form>
+    </article>
+
+    <details>
+      <summary role="button" class="secondary">Import Events</summary>
+      <article>
+        <p>Upload a CSV file with the columns <code>event_type,title,event_date,description</code> to create multiple events at once. The <code>event_date</code> must be in a valid ISO 8601 format (e.g., <code>2025-10-21T15:30:00</code>).</p>
+        <form id="bulk-import-events-form">
+          <label for="events-csv-file">CSV File</label>
+          <input type="file" id="events-csv-file" accept=".csv" required>
+          <button type="submit">Import from CSV</button>
+        </form>
+        <pre id="events-import-results" style="display: none;"></pre>
+      </article>
+      <article>
+        <p>Or, import from a published Google Sheet URL.</p>
+        <form id="google-sheet-import-events-form">
+          <label for="events-sheet-url">Published Google Sheet URL</label>
+          <input type="url" id="events-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
+          <button type="submit">Import from Sheet</button>
+        </form>
+        <pre id="events-sheet-import-results" style="display: none;"></pre>
+      </article>
+    </details>
+
+    <article>
+      <h2>Existing Events</h2>
+      <table id="events-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="events-tbody">
+          <tr><td colspan="4" aria-busy="true">Loading events...</td></tr>
+        </tbody>
+      </table>
+    </article>
+  </main>
+
+  <script>
+    import { createClient } from '@supabase/supabase-js';
+
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const eventsTbody = document.getElementById('events-tbody');
+
+      async function fetchAndDisplayEvents() {
+        const { data: events, error } = await supabase.from('events').select('*').order('event_date', { ascending: true });
+        if (error) {
+          console.error("Error fetching events:", error);
+          eventsTbody.innerHTML = '<tr><td colspan="4">Error loading events.</td></tr>';
+          return;
+        }
+        if (events.length === 0) {
+          eventsTbody.innerHTML = '<tr><td colspan="4">No events found. Add one above!</td></tr>';
+          return;
+        }
+        eventsTbody.innerHTML = events.map((event) => `
+          <tr data-event-id="${event.id}">
+            <td>${event.event_type}</td>
+            <td>${event.title}</td>
+            <td>${new Date(event.event_date).toLocaleString()}</td>
+            <td style="text-align: center; white-space: nowrap;">
+              <a href="/admin/rsvps/${event.id}" title="View RSVPs" class="contrast" style="text-decoration: none; margin-right: 1rem;">👥</a>
+              <a href="/admin/edit/${event.id}" title="Edit" class="contrast" style="text-decoration: none; margin-right: 1rem;">✏️</a>
+              <a href="#" title="Delete" data-action="delete" class="contrast" style="text-decoration: none; color: var(--pico-color-red-500);">🗑️</a>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      async function checkAdminStatusAndLoadData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { window.location.href = '/login'; return; }
+        const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+        if (error || !profile || !profile.is_admin) {
+          console.error('Admin access denied.');
+          window.location.href = '/';
+          return;
+        }
+        fetchAndDisplayEvents();
+      }
+      checkAdminStatusAndLoadData();
+
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      });
+
+      document.getElementById('add-event-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        const newEvent = {
+          event_type: formData.get('event_type'),
+          title: formData.get('title'),
+          event_date: formData.get('event_date'),
+          description: formData.get('description'),
+        };
+        const { error } = await supabase.from('events').insert([newEvent]);
+        if (error) {
+          alert('Error adding event: ' + error.message);
+        } else {
+          alert('Event added successfully!');
+          form.reset();
+          fetchAndDisplayEvents();
+        }
+      });
+
+      eventsTbody.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (target.dataset.action === 'delete') {
+          event.preventDefault();
+          const row = target.closest('tr');
+          const eventId = row.dataset.eventId;
+          if (confirm('Are you sure you want to delete this event?')) {
+            const { error } = await supabase.from('events').delete().eq('id', eventId);
+            if (error) {
+              alert('Error deleting event: ' + error.message);
+            } else {
+              row.remove();
+            }
+          }
+        }
+      });
+
+      function setupImportForm(formId, fileInputId, resultsAreaId, action, payloadKey) {
+        const form = document.getElementById(formId);
+        const resultsArea = document.getElementById(resultsAreaId);
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          resultsArea.style.display = 'block';
+          resultsArea.textContent = 'Importing...';
+          let payload = {};
+          if (payloadKey === 'csvText') {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) { alert('Please select a file.'); return; }
+            const csvText = await file.text();
+            payload = { csvText };
+          } else {
+            const sheetUrl = document.getElementById(fileInputId).value;
+            if (!sheetUrl) { alert('Please enter a URL.'); return; }
+            payload = { sheetUrl };
+          }
+          const { data, error } = await supabase.functions.invoke('manage-content', {
+            method: 'POST',
+            body: { action, payload },
+          });
+          if (error) {
+            resultsArea.textContent = `Error: ${error.message}`;
+          } else {
+            const { successful, failed } = data;
+            let resultsText = `Import Complete!\n\nSuccessful (${successful.length}):\n`;
+            resultsText += successful.map(s => `- ${s.title || s.event_type}`).join('\n');
+            resultsText += `\n\nFailed (${failed.length}):\n`;
+            resultsText += failed.map(f => `- ${f.record.title || f.record.event_type}: ${f.error}`).join('\n');
+            resultsArea.textContent = resultsText;
+            fetchAndDisplayEvents();
+          }
+        });
+      }
+
+      setupImportForm('bulk-import-events-form', 'events-csv-file', 'events-import-results', 'bulk_import_events_csv', 'csvText');
+      setupImportForm('google-sheet-import-events-form', 'events-sheet-url', 'events-sheet-import-results', 'bulk_import_events_sheet', 'sheetUrl');
+    }
+  </script>
+</body>
+</html>
