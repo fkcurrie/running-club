@@ -37,3 +37,51 @@ Security is handled by Supabase, a trusted provider:
 1.  **Authentication:** The signup and login process is fully managed by Supabase Auth, which includes email validation and secure password handling.
 2.  **Data Storage:** Student information is stored in a secure PostgreSQL database, hosted by Supabase.
 3.  **Access Control:** Sensitive content (like the full calendar) will only be accessible to authenticated users.
+
+---
+
+## 5. Local Development Setup
+
+To run this project on your local machine, follow these steps.
+
+### Prerequisites
+
+*   [Node.js](https://nodejs.org/) (v22.17.0 or higher)
+*   [npm](https://www.npmjs.com/) (comes with Node.js)
+
+### Steps
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/fkcurrie/running-club.git
+    ```
+
+2.  **Navigate to the Project Directory:**
+    ```bash
+    cd running-club-site
+    ```
+
+3.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+
+4.  **Set Up Environment Variables:**
+    *   Create a new file named `.env` in the root of the `running-club-site` directory.
+    *   You will need to get your own project URL and anonymous key from your Supabase project dashboard under `Project Settings > API`.
+    *   Add the following content to the `.env` file, replacing the placeholder values:
+        ```
+        # Supabase Credentials
+        PUBLIC_SUPABASE_URL=[YOUR_SUPABASE_URL]
+        PUBLIC_SUPABASE_ANON_KEY=[YOUR_SUPABASE_ANON_KEY]
+        ```
+
+5.  **Run the Development Server:**
+    *   This project requires the `--host` flag to be accessible on your local network.
+    *   Run the following command:
+        ```bash
+        npm run dev -- --host
+        ```
+
+6.  **Access the Site:**
+    *   The server will now be running. You can access it in your browser at `http://<your-local-ip-address>:4173`.
