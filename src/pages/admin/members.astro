@@ -25,7 +25,55 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
     <h1>Manage Club Members</h1>
 
+    <details>
+      <summary role="button">Create New User</summary>
+      <article>
+        <form id="create-user-form">
+          <div class="grid">
+            <label for="full_name">Full Name
+              <input type="text" id="full_name" name="full_name" required>
+            </label>
+            <label for="grade">Grade
+              <input type="number" id="grade" name="grade" required>
+            </label>
+          </div>
+          <label for="email">School Email</label>
+          <input type="email" id="email" name="email" required>
+          <button type="submit">Create User & Send Invite</button>
+        </form>
+      </article>
+    </details>
+
+    <details>
+      <summary role="button" class="secondary">Import Members</summary>
+      <article>
+        <h2>Bulk Import from CSV</h2>
+        <p>Upload a CSV file with the columns <code>email,full_name,grade</code> to invite multiple members at once.</p>
+        <form id="bulk-import-form">
+          <label for="csv-file">CSV File</label>
+          <input type="file" id="csv-file" name="csvFile" accept=".csv" required>
+          <button type="submit">Import from CSV</button>
+        </form>
+        <pre id="import-results" style="display: none;"></pre>
+      </article>
+      <article>
+        <h2>Import from Google Sheet</h2>
+        <p>
+          <strong>Instructions:</strong> In Google Sheets, go to 
+          <code>File > Share > Publish to the web</code>. Select the correct sheet, choose "Comma-separated values (.csv)", and click "Publish". 
+          Paste the generated URL below.
+        </p>
+        <form id="google-sheet-import-form">
+          <label for="sheet-url">Published Google Sheet URL</label>
+          <input type="url" id="sheet-url" name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
+          <button type="submit">Import from Sheet</button>
+        </form>
+        <pre id="sheet-import-results" style="display: none;"></pre>
+      </article>
+    </details>
+
     <article>
+      <h2>Existing Members</h2>
       <table id="members-table">
         <thead>
           <tr>
@@ -164,7 +212,125 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
       }
       checkAdminStatusAndLoadData();
 
-      // --- 5. Handle Logout ---
+      // --- 5. Handle Create User Form ---
+      const createUserForm = document.getElementById('create-user-form');
+      createUserForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const formData = new FormData(createUserForm);
+        const newUser = {
+          email: formData.get('email'),
+          full_name: formData.get('full_name'),
+          grade: formData.get('grade'),
+        };
+
+        const { error } = await supabase.functions.invoke('manage-user', {
+          method: 'POST',
+          body: { action: 'create_user', user: newUser },
+        });
+
+        if (error) {
+          alert(`Error creating user: ${error.message}`);
+        } else {
+          alert('User created successfully! They will receive an invitation email to set their password.');
+          createUserForm.reset();
+          fetchAndDisplayMembers(); // Refresh the list
+        }
+      });
+
+      // --- 6. Handle Bulk Import Form ---
+      const bulkImportForm = document.getElementById('bulk-import-form');
+      const resultsArea = document.getElementById('import-results');
+
+      bulkImportForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const fileInput = document.getElementById('csv-file');
+        const file = fileInput.files[0];
+
+        if (!file) {
+          alert('Please select a CSV file to upload.');
+          return;
+        }
+
+        // Simple CSV parsing
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const text = e.target.result;
+          const lines = text.split('\n').filter(line => line.trim() !== '');
+          const header = lines.shift().trim().split(',');
+
+          // Basic validation
+          if (header[0] !== 'email' || header[1] !== 'full_name' || header[2] !== 'grade') {
+            alert('Invalid CSV format. Please ensure the header is email,full_name,grade');
+            return;
+          }
+
+          const usersToCreate = lines.map(line => {
+            const values = line.trim().split(',');
+            return {
+              email: values[0],
+              full_name: values[1],
+              grade: parseInt(values[2], 10),
+            };
+          });
+
+          resultsArea.style.display = 'block';
+          resultsArea.textContent = `Importing ${usersToCreate.length} users...`;
+
+          const { data, error } = await supabase.functions.invoke('manage-user', {
+            method: 'POST',
+            body: { action: 'bulk_create_users', users: usersToCreate },
+          });
+
+          if (error) {
+            resultsArea.textContent = `Error during import: ${error.message}`;
+          } else {
+            const { successful, failed } = data;
+            let resultsText = `Import Complete!\n\nSuccessful Invites (${successful.length}):\n`;
+            resultsText += successful.map(u => `- ${u.email}`).join('\n');
+            resultsText += `\n\nFailed Invites (${failed.length}):\n`;
+            resultsText += failed.map(f => `- ${f.email}: ${f.error}`).join('\n');
+            resultsArea.textContent = resultsText;
+            fetchAndDisplayMembers(); // Refresh the list
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // --- 7. Handle Google Sheet Import ---
+      const googleSheetImportForm = document.getElementById('google-sheet-import-form');
+      const sheetResultsArea = document.getElementById('sheet-import-results');
+
+      googleSheetImportForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const sheetUrl = document.getElementById('sheet-url').value;
+
+        if (!sheetUrl) {
+          alert('Please enter a Google Sheet URL.');
+          return;
+        }
+
+        sheetResultsArea.style.display = 'block';
+        sheetResultsArea.textContent = 'Importing from Google Sheet...';
+
+        const { data, error } = await supabase.functions.invoke('manage-user', {
+          method: 'POST',
+          body: { action: 'bulk_create_from_sheet', sheetUrl: sheetUrl },
+        });
+
+        if (error) {
+          sheetResultsArea.textContent = `Error during import: ${error.message}`;
+        } else {
+          const { successful, failed } = data;
+          let resultsText = `Import Complete!\n\nSuccessful Invites (${successful.length}):\n`;
+          resultsText += successful.map(u => `- ${u.email}`).join('\n');
+          resultsText += `\n\nFailed Invites (${failed.length}):\n`;
+          resultsText += failed.map(f => `- ${f.email}: ${f.error}`).join('\n');
+          sheetResultsArea.textContent = resultsText;
+          fetchAndDisplayMembers(); // Refresh the list
+        }
+      });
+
+      // --- 8. Handle Logout ---
       document.getElementById('logout-button').addEventListener('click', async () => {
         await supabase.auth.signOut();
         window.location.href = '/';

@@ -46,10 +46,102 @@ Deno.serve(async (req) => {
       Deno.env.get('CUSTOM_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { action, userId, is_admin } = await req.json();
+    const { action, userId, is_admin, user: newUser, users: newUsers, sheetUrl } = await req.json();
 
     // --- Handle different admin actions ---
     switch (action) {
+      case 'bulk_create_from_sheet': {
+        if (!sheetUrl) {
+          throw new Error('A sheetUrl is required.');
+        }
+        const response = await fetch(sheetUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch Google Sheet: ${response.statusText}`);
+        }
+        const csvText = await response.text();
+        
+        const lines = csvText.split('\n').filter(line => line.trim() !== '');
+        const header = lines.shift().trim().split(',');
+        if (header[0] !== 'email' || header[1] !== 'full_name' || header[2] !== 'grade') {
+          throw new Error('Invalid CSV format. Please ensure the header is email,full_name,grade');
+        }
+
+        const usersToCreate = lines.map(line => {
+          const values = line.trim().split(',');
+          return {
+            email: values[0],
+            full_name: values[1],
+            grade: parseInt(values[2], 10),
+          };
+        });
+
+        const successful = [];
+        const failed = [];
+        for (const user of usersToCreate) {
+          if (!user.email) {
+            failed.push({ email: 'Missing Email', error: 'Email is required.' });
+            continue;
+          }
+          const { data, error } = await adminSupabaseClient.auth.admin.inviteUserByEmail(
+            user.email,
+            { data: { full_name: user.full_name, grade: user.grade } }
+          );
+          if (error) {
+            failed.push({ email: user.email, error: error.message });
+          } else {
+            successful.push(data.user);
+          }
+        }
+        return new Response(JSON.stringify({ successful, failed }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+
+      case 'bulk_create_users': {
+        if (!newUsers || !Array.isArray(newUsers)) {
+          throw new Error('An array of users is required for bulk import.');
+        }
+        const successful = [];
+        const failed = [];
+
+        for (const user of newUsers) {
+          if (!user.email) {
+            failed.push({ email: 'Missing Email', error: 'Email is required.' });
+            continue;
+          }
+          const { data, error } = await adminSupabaseClient.auth.admin.inviteUserByEmail(
+            user.email,
+            { data: { full_name: user.full_name, grade: user.grade } }
+          );
+          if (error) {
+            failed.push({ email: user.email, error: error.message });
+          } else {
+            successful.push(data.user);
+          }
+        }
+        return new Response(JSON.stringify({ successful, failed }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+
+      case 'create_user': {
+        if (!newUser || !newUser.email) {
+          throw new Error('Email is required to create a user.');
+        }
+        const { data: { user }, error } = await adminSupabaseClient.auth.admin.inviteUserByEmail(
+          newUser.email,
+          { data: { full_name: newUser.full_name, grade: newUser.grade } }
+        );
+        if (error) throw error;
+        // The profile is created automatically by a trigger in the database.
+        return new Response(JSON.stringify({ success: true, user }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+      
       case 'list': {
         const { data: users, error } = await adminSupabaseClient.auth.admin.listUsers();
         if (error) throw error;

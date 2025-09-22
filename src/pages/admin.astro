@@ -34,6 +34,27 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
         <button type="submit">Save Announcement</button>
         <button type="reset" class="secondary">Clear Form</button>
       </form>
+      <details>
+        <summary role="button" class="secondary">Import Announcements</summary>
+        <article>
+          <p>Upload a CSV file with the columns <code>title,content</code> to create multiple announcements at once.</p>
+          <form id="bulk-import-announcements-form">
+            <label for="announcements-csv-file">CSV File</label>
+            <input type="file" id="announcements-csv-file" accept=".csv" required>
+            <button type="submit">Import from CSV</button>
+          </form>
+          <pre id="announcements-import-results" style="display: none;"></pre>
+        </article>
+        <article>
+          <p>Or, import from a published Google Sheet URL.</p>
+          <form id="google-sheet-import-announcements-form">
+            <label for="announcements-sheet-url">Published Google Sheet URL</label>
+            <input type="url" id="announcements-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
+            <button type="submit">Import from Sheet</button>
+          </form>
+          <pre id="announcements-sheet-import-results" style="display: none;"></pre>
+        </article>
+      </details>
     </article>
 
     <article>
@@ -83,6 +104,27 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
         <button type="submit">Add Event</button>
       </form>
+      <details>
+        <summary role="button" class="secondary">Import Events</summary>
+        <article>
+          <p>Upload a CSV file with the columns <code>event_type,title,event_date,description</code> to create multiple events at once. The <code>event_date</code> must be in a valid ISO 8601 format (e.g., <code>2025-10-21T15:30:00</code>).</p>
+          <form id="bulk-import-events-form">
+            <label for="events-csv-file">CSV File</label>
+            <input type="file" id="events-csv-file" accept=".csv" required>
+            <button type="submit">Import from CSV</button>
+          </form>
+          <pre id="events-import-results" style="display: none;"></pre>
+        </article>
+        <article>
+          <p>Or, import from a published Google Sheet URL.</p>
+          <form id="google-sheet-import-events-form">
+            <label for="events-sheet-url">Published Google Sheet URL</label>
+            <input type="url" id="events-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
+            <button type="submit">Import from Sheet</button>
+          </form>
+          <pre id="events-sheet-import-results" style="display: none;"></pre>
+        </article>
+      </details>
     </article>
 
     <article>
@@ -276,6 +318,52 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
           }
         }
       });
+
+      // --- 7. Handle Bulk Imports ---
+      function setupImportForm(formId, fileInputId, resultsAreaId, action, payloadKey) {
+        const form = document.getElementById(formId);
+        const resultsArea = document.getElementById(resultsAreaId);
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          resultsArea.style.display = 'block';
+          resultsArea.textContent = 'Importing...';
+
+          let payload = {};
+          if (payloadKey === 'csvText') {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) { alert('Please select a file.'); return; }
+            const csvText = await file.text();
+            payload = { csvText };
+          } else {
+            const sheetUrl = document.getElementById(fileInputId).value;
+            if (!sheetUrl) { alert('Please enter a URL.'); return; }
+            payload = { sheetUrl };
+          }
+
+          const { data, error } = await supabase.functions.invoke('manage-content', {
+            method: 'POST',
+            body: { action, payload },
+          });
+
+          if (error) {
+            resultsArea.textContent = `Error: ${error.message}`;
+          } else {
+            const { successful, failed } = data;
+            let resultsText = `Import Complete!\n\nSuccessful (${successful.length}):\n`;
+            resultsText += successful.map(s => `- ${s.title || s.event_type}`).join('\n');
+            resultsText += `\n\nFailed (${failed.length}):\n`;
+            resultsText += failed.map(f => `- ${f.record.title || f.record.event_type}: ${f.error}`).join('\n');
+            resultsArea.textContent = resultsText;
+            fetchData(); // Refresh lists
+          }
+        });
+      }
+
+      setupImportForm('bulk-import-announcements-form', 'announcements-csv-file', 'announcements-import-results', 'bulk_import_announcements_csv', 'csvText');
+      setupImportForm('google-sheet-import-announcements-form', 'announcements-sheet-url', 'announcements-sheet-import-results', 'bulk_import_announcements_sheet', 'sheetUrl');
+      setupImportForm('bulk-import-events-form', 'events-csv-file', 'events-import-results', 'bulk_import_events_csv', 'csvText');
+      setupImportForm('google-sheet-import-events-form', 'events-sheet-url', 'events-sheet-import-results', 'bulk_import_events_sheet', 'sheetUrl');
     }
   </script>
 </body>
