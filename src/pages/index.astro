@@ -1,49 +1,60 @@
 ---
-import Layout from '../layouts/Layout.astro';
+// src/pages/index.astro
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 ---
-
-<Layout title="Michelle O'Bonsawin Running Club">
-  <header style="text-align: center; margin-top: 2rem;">
-    <h1>Club de Course Michelle O'Bonsawin</h1>
-    <p>Welcome to the official website of the school running club!</p>
-  </header>
-  
-  <article style="margin-top: 2rem;">
-    <p>
-      This is the central hub for all club members. Here you can find the latest schedule for practices, information about upcoming races, and connect with your fellow runners.
-    </p>
-    <div class="grid">
-      <div>
-        <a href="/login" role="button" class="primary">Member Login</a>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Michelle O'Bonsawin Running Club</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <main class="container">
+    <header style="text-align: center; margin-top: 2rem;">
+      <h1>Club de Course Michelle O'Bonsawin</h1>
+      <p>Welcome to the official website of the school running club!</p>
+    </header>
+    
+    <article style="margin-top: 2rem;">
+      <p>
+        This is the central hub for all club members. Here you can find the latest schedule for practices, information about upcoming races, and connect with your fellow runners.
+      </p>
+      <div class="grid">
+        <div>
+          <a href="/login" role="button" class="primary">Member Login</a>
+        </div>
+        <div>
+          <a href="/signup" role="button" class="secondary">Sign Up for the Club</a>
+        </div>
       </div>
-      <div>
-        <a href="/signup" role="button" class="secondary">Sign Up for the Club</a>
-      </div>
-    </div>
-  </article>
-</Layout>
+    </article>
+  </main>
 
-<script>
-  import { createClient } from '@supabase/supabase-js';
+  <script>
+    import { createClient } from '@supabase/supabase-js';
 
-  const body = document.querySelector('body');
-  const supabaseUrl = body.dataset.supabaseUrl;
-  const supabaseAnonKey = body.dataset.supabaseAnonKey;
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase credentials not found in the DOM.");
-  } else {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Supabase credentials not found in the DOM.");
+    } else {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Check if the user is already logged in.
-    // If they are, redirect them straight to the schedule page.
-    async function checkAndRedirect() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        window.location.href = '/schedule';
+      // Check if the user is already logged in.
+      // If they are, redirect them straight to the schedule page.
+      async function checkAndRedirect() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.location.href = '/schedule';
+        }
       }
-    }
 
-    checkAndRedirect();
-  }
-</script>
+      checkAndRedirect();
+    }
+  </script>
+</body>
+</html>
