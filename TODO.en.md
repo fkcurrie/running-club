@@ -33,6 +33,7 @@ This section lists potential new features and improvements for future versions o
 *   [ ] **Photo Gallery:** Create a section where coaches or admins can upload photos from practices and races.
 *   [ ] **Personal Bests:** Add a feature to the user profile where members can track their personal records for different race distances.
 *   [ ] **Coach's Corner:** A dedicated page for information about the coaches, including bios and contact information.
+*   [ ] **Integrated Feedback Form:** Create a feedback page where users can submit bug reports and feature requests. The form will automatically create an issue in the GitHub repository and provide the user with a reference number.
 
 ### Admin & Backend
 
