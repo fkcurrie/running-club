@@ -107,5 +107,40 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
     // Init
     themeSwitcher.init();
   </script>
+  <script type="module">
+    import { createClient } from '@supabase/supabase-js';
+
+    const body = document.querySelector('body');
+    const supabaseUrl = body.dataset.supabaseUrl;
+    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      
+      // Handle Logout
+      const logoutButton = document.getElementById('logout-button');
+      if (logoutButton) {
+        logoutButton.addEventListener('click', async (event) => {
+          event.preventDefault();
+          await supabase.auth.signOut();
+          window.location.href = '/';
+        });
+      }
+
+      // Check admin status and show/hide admin link
+      const adminLink = document.getElementById('admin-link');
+      if (adminLink) {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            supabase.from('profiles').select('is_admin').eq('id', user.id).single().then(({ data: profile }) => {
+              if (profile && profile.is_admin) {
+                adminLink.style.display = 'block';
+              }
+            });
+          }
+        });
+      }
+    }
+  </script>
 </body>
 </html>

@@ -97,11 +97,5 @@ import Layout from '../layouts/Layout.astro';
     }
 
     checkLoginAndLoad();
-
-    // --- 3. Handle Logout ---
-    document.getElementById('logout-button').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      window.location.href = '/';
-    });
   }
 </script>

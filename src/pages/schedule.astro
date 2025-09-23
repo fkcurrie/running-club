@@ -1,17 +1,31 @@
----
+--- 
 import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Schedule">
   <h1>Upcoming Events</h1>
-  <p>This schedule is for members only. Welcome!</p>
-
-  <div id="calendar"></div>
+  <p>Click on a date in the calendar to see events and RSVP.</p>
+  
+  <div class="grid">
+    <div id="calendar"></div>
+    <div id="events-list">
+      <p>Select a date to see events.</p>
+    </div>
+  </div>
 </Layout>
+
+<style>
+  #calendar {
+    max-width: 100%;
+  }
+  #events-list article {
+    margin-top: 1rem;
+  }
+</style>
 
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-  import { VanillaCalendar } from 'https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@2.9.2/+esm'
+  import { VanillaCalendar } from 'https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@2.9.2/+esm';
 
   const body = document.querySelector('body');
   const supabaseUrl = body.dataset.supabaseUrl;
@@ -21,55 +35,121 @@ import Layout from '../layouts/Layout.astro';
     console.error("Supabase credentials not found in the DOM.");
   } else {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const adminLink = document.getElementById('admin-link');
+    const eventsList = document.getElementById('events-list');
     let currentUser = null;
+    let allEvents = [];
+    let userRsvps = new Set();
 
-    async function fetchAndDisplayEvents() {
-      const { data: events, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
+    function generateIcs(event) {
+      const startDate = new Date(event.event_date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const endDate = new Date(new Date(event.event_date).getTime() + 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const icsContent = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
+        `UID:${event.id}@michelles.running.club`,
+        `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`,
+        `DTSTART:${startDate}`, `DTEND:${endDate}`,
+        `SUMMARY:${event.title}`,
+        `DESCRIPTION:${event.description || ''}`,
+        'END:VEVENT', 'END:VCALENDAR'
+      ].join('\n');
+      return `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+    }
 
-      if (error) {
-        console.error("Error fetching events:", error);
+    function renderEventsForDate(date) {
+      const selectedEvents = allEvents.filter(event => new Date(event.event_date).toDateString() === new Date(date).toDateString());
+
+      if (selectedEvents.length === 0) {
+        eventsList.innerHTML = '<p>No events for this date.</p>';
         return;
       }
+
+      eventsList.innerHTML = selectedEvents.map(event => `
+        <article>
+          <header>
+            <strong>${event.title}</strong><br>
+            <small>${new Date(event.event_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</small>
+          </header>
+          ${event.description ? `<p>${event.description}</p>` : ''}
+          <footer class="rsvp-controls" data-event-id="${event.id}">
+            ${userRsvps.has(event.id) ?
+              `<p><strong>✓ You are going</strong> <a href="#" data-action="cancel">Cancel RSVP</a></p>` :
+              `<a href="#" role="button" data-action="rsvp">RSVP: I'm Going</a>`
+            }
+            <a href="${generateIcs(event)}" download="${event.title}.ics" class="secondary" role="button">Add to Calendar</a>
+          </footer>
+        </article>
+      `).join('');
+    }
+
+    async function initializeCalendar() {
+      const [eventsRes, rsvpsRes] = await Promise.all([
+        supabase.from('events').select('*').order('event_date', { ascending: true }),
+        supabase.from('rsvps').select('event_id').eq('user_id', currentUser.id)
+      ]);
+
+      if (eventsRes.error || rsvpsRes.error) {
+        return console.error("Error fetching data:", eventsRes.error || rsvpsRes.error);
+      }
+
+      allEvents = eventsRes.data;
+      userRsvps = new Set(rsvpsRes.data.map(r => r.event_id));
 
       const calendarOptions = {
         actions: {
           clickDay(e, self) {
-            console.log(self.selectedDates);
+            if (self.selectedDates[0]) {
+              renderEventsForDate(self.selectedDates[0]);
+            }
           },
         },
         settings: {
           visibility: {
-            theme: 'light',
+            theme: document.querySelector("html").getAttribute("data-theme") || 'light',
           },
         },
-        events: events.map(event => ({
-          start: event.event_date,
-          title: event.title,
-          description: event.description,
+        dates: allEvents.map(event => ({
+          start: new Date(event.event_date),
+          // You can add markers to days with events if you like
         })),
       };
       const calendar = new VanillaCalendar('#calendar', calendarOptions);
       calendar.init();
     }
 
+    eventsList.addEventListener('click', async (event) => {
+      const target = event.target;
+      const action = target.dataset.action;
+      if (!action || (action !== 'rsvp' && action !== 'cancel')) return;
+
+      event.preventDefault();
+      const controlsDiv = target.closest('.rsvp-controls');
+      const eventId = controlsDiv.dataset.eventId;
+      controlsDiv.innerHTML = '<p aria-busy="true">Updating...</p>';
+
+      if (action === 'rsvp') {
+        await supabase.from('rsvps').insert({ event_id: eventId, user_id: currentUser.id });
+      } else if (action === 'cancel') {
+        await supabase.from('rsvps').delete().eq('event_id', eventId).eq('user_id', currentUser.id);
+      }
+      // Re-initialize to get fresh RSVP data and re-render
+      initializeCalendar();
+      // Re-render events for the currently selected date
+      const calendarInstance = document.querySelector('#calendar').vanillaCalendar;
+      if (calendarInstance.selectedDates[0]) {
+        renderEventsForDate(calendarInstance.selectedDates[0]);
+      }
+    });
+
     async function checkSessionAndLoadData() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/login'; return; }
+      if (!user) {
+        window.location.href = '/login';
+        return;
+      }
       currentUser = user;
-      fetchAndDisplayEvents();
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-      if (profile && profile.is_admin) adminLink.style.display = 'block';
+      initializeCalendar();
     }
     
     checkSessionAndLoadData();
-
-    document.getElementById('logout-button').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      window.location.href = '/';
-    });
   }
 </script>
