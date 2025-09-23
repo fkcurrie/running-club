@@ -1,6 +1,6 @@
 # Guide de l'Administrateur
 
-Bienvenue dans le guide de gestion du site web du Club de Course Michelle O'Bonsawin. Ce document explique comment effectuer les tâches les plus courantes, comme la mise à jour du calendrier des événements et la gestion des membres.
+Bienvenue dans le guide de gestion du site web du Club de Course de l'École. Ce document explique comment effectuer les tâches les plus courantes, comme la mise à jour du calendrier des événements et la gestion des membres.
 
 ---
 

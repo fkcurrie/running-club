@@ -1,8 +1,8 @@
-# Michelle O'Bonsawin Running Club
+# School Running Club
 
 ## 1. About the Project
 
-This project is the official website for the Michelle O'Bonsawin school running club. The goal is to provide a central, secure, and easy-to-manage hub for student members, coaches, and parents.
+This project is the official website for the school running club. The goal is to provide a central, secure, and easy-to-manage hub for student members, coaches, and parents.
 
 ---
 

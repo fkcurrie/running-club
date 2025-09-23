@@ -1,6 +1,6 @@
 # Administrator's Guide
 
-Welcome to the guide for managing the Michelle O'Bonsawin Running Club website. This document explains how to perform the most common tasks, like updating the event schedule and managing members.
+Welcome to the guide for managing the School Running Club website. This document explains how to perform the most common tasks, like updating the event schedule and managing members.
 
 ---
 

@@ -3,7 +3,7 @@
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Status](https://img.shields.io/badge/status-stable-green)
 
-This is the official website for the Michelle O'Bonsawin Running Club.
+This is the official website for the School Running Club.
 
 ## 🚀 Project Structure
 

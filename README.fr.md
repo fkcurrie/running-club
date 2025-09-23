@@ -1,8 +1,8 @@
-# Club de Course Michelle O'Bonsawin
+# Club de Course de l'École
 
 ## 1. À propos du projet
 
-Ce projet est le site web officiel du club de course de l'école Michelle O'Bonsawin. L'objectif est de fournir une plateforme centrale, sécurisée et facile à gérer pour les élèves membres, les entraîneurs et les parents.
+Ce projet est le site web officiel du club de course de l'école. L'objectif est de fournir une plateforme centrale, sécurisée et facile à gérer pour les élèves membres, les entraîneurs et les parents.
 
 ---
 
@@ -17,7 +17,7 @@ Pour répondre aux exigences d'hébergement gratuit, de sécurité et de mainten
     *   **Raison :** Un générateur de sites statiques qui produit des sites web très rapides. Il permet de construire le site avec des composants réutilisables et de gérer le contenu via des fichiers simples (comme le Markdown), facilitant les mises à jour pour les utilisateurs non techniques.
 
 *   **Backend & Base de Données :** [Supabase](https://supabase.com/)
-    *   **Raison :** Une plateforme Backend-as-a-Service qui fournit une base de données PostgreSQL sécurisée et un système d'authentification complet. Supabase gérera l'inscription des utilisateurs, la validation par courriel et les connexions, garantissant que les données des élèves sont stockées en toute sécurité. Le futur administrateur pourra consulter la liste des membres via un tableau de bord convivial.
+    *   **Raison :** Une plateforme Backend-as-a-Service qui fournit une base de données PostgreSQL sécurisée et un système d'authentification complet. Supabase gérera l'inscription des utilisateurs, la validation par courriel et les connexions, garantissant que les données des élèves sont stockées en toute sécurité. Le futur administraterateur pourra consulter la liste des membres via un tableau de bord convivial.
 
 ---
 
