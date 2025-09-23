@@ -6,19 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.2.0] - 2025-09-21
+## [0.1.0] - 2025-09-22
 
 ### Changed
 
-*   **Complete Overhaul of Technical Architecture:**
-    *   Replaced the Google Workspace solution with a modern web stack.
-    *   **Hosting:** Switched from Google Sites to **Render.com**.
-    *   **Frontend:** Adopted the **Astro** static site generator.
-    *   **Backend & Database:** Replaced Google Forms/Sheets with **Supabase** for authentication and data management.
-*   Updated `README.md` to reflect the new technology stack.
-*   Updated `TODO.md` with a detailed development plan for the new architecture, including service setup, local development, and deployment.
+*   Rolled back recent UI modernization attempts to restore all site functionality.
+*   This version marks a return to the last known stable state of the application.
 
-## [0.1.0] - 2025-09-21
+## [0.0.1] - 2025-09-21
 
 ### Added
 

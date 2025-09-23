@@ -1,10 +1,9 @@
-# Astro Starter Kit: Minimal
+# Running Club Website
 
-```sh
-npm create astro@latest -- --template minimal
-```
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Status](https://img.shields.io/badge/status-stable-green)
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+This is the official website for the Michelle O'Bonsawin Running Club.
 
 ## 🚀 Project Structure
 
