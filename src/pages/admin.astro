@@ -42,5 +42,10 @@ import Layout from '../layouts/Layout.astro';
       }
     }
     checkAdminStatus();
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    });
   }
 </script>
