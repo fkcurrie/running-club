@@ -1,155 +1,75 @@
 ---
-// src/pages/schedule.astro
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+import Layout from '../layouts/Layout.astro';
 ---
 
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Schedule | Running Club</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
-</head>
-<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
-  <main class="container">
-    <nav>
-      <ul>
-        <li><strong>Club Schedule</strong></li>
-      </ul>
-      <ul>
-        <li><a href="/announcements">Announcements</a></li>
-        <li><a href="/profile">My Profile</a></li>
-        <li><a href="/admin" id="admin-link" style="display: none;">Admin Dashboard</a></li>
-        <li><a href="#" id="logout-button">Logout</a></li>
-      </ul>
-    </nav>
+<Layout title="Schedule">
+  <h1>Upcoming Events</h1>
+  <p>This schedule is for members only. Welcome!</p>
 
-    <h1>Upcoming Events</h1>
-    <p>This schedule is for members only. Welcome!</p>
+  <div id="calendar"></div>
+</Layout>
 
-    <article>
-      <h2>Upcoming Practices</h2>
-      <div id="practices-list">
-        <p aria-busy="true">Loading practices...</p>
-      </div>
-    </article>
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+  import { VanillaCalendar } from 'https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@2.9.2/+esm'
 
-    <article>
-      <h2>Upcoming Races</h2>
-      <div id="races-list">
-        <p aria-busy="true">Loading races...</p>
-      </div>
-    </article>
-  </main>
+  const body = document.querySelector('body');
+  const supabaseUrl = body.dataset.supabaseUrl;
+  const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase credentials not found in the DOM.");
+  } else {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const adminLink = document.getElementById('admin-link');
+    let currentUser = null;
 
-    const body = document.querySelector('body');
-    const supabaseUrl = body.dataset.supabaseUrl;
-    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+    async function fetchAndDisplayEvents() {
+      const { data: events, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('event_date', { ascending: true });
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Supabase credentials not found in the DOM.");
-    } else {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      const adminLink = document.getElementById('admin-link');
-      const practicesList = document.getElementById('practices-list');
-      const racesList = document.getElementById('races-list');
-      let currentUser = null;
-
-      function generateIcs(event) {
-        const startDate = new Date(event.event_date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        const endDate = new Date(new Date(event.event_date).getTime() + 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        const icsContent = [
-          'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
-          `UID:${event.id}@michelles.running.club`,
-          `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`, 
-          `DTSTART:${startDate}`, `DTEND:${endDate}`,
-          `SUMMARY:${event.title}`,
-          `DESCRIPTION:${event.description || ''}`,
-          'END:VEVENT', 'END:VCALENDAR'
-        ].join('\n');
-        return `data:text/calendar;charset=utf8,${encodeURIComponent(icsContent)}`;
+      if (error) {
+        console.error("Error fetching events:", error);
+        return;
       }
 
-      async function fetchAndDisplayEvents() {
-        const [eventsRes, rsvpsRes] = await Promise.all([
-          supabase.from('events').select('*').order('event_date', { ascending: true }),
-          supabase.from('rsvps').select('event_id').eq('user_id', currentUser.id)
-        ]);
-
-        if (eventsRes.error || rsvpsRes.error) {
-          practicesList.innerHTML = '<p>Could not load schedule.</p>';
-          racesList.innerHTML = '';
-          return console.error("Error fetching data:", eventsRes.error || rsvpsRes.error);
-        }
-
-        const rsvpEventIds = new Set(rsvpsRes.data.map(r => r.event_id));
-        const practices = eventsRes.data.filter(e => e.event_type === 'Practice');
-        const races = eventsRes.data.filter(e => e.event_type === 'Race');
-
-        const renderList = (element, eventList) => {
-          if (eventList.length > 0) {
-            element.innerHTML = `<ul>${eventList.map((event) => `
-              <li>
-                <strong>${new Date(event.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${new Date(event.event_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</strong>: ${event.title}
-                ${event.description ? `<p><small>${event.description}</small></p>` : ''}
-                <div class="rsvp-controls" data-event-id="${event.id}" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 1rem;">
-                  <div>
-                    ${rsvpEventIds.has(event.id) ?
-                      `<p style="margin-bottom: 0;"><strong>✓ You are going</strong> <a href="#" data-action="cancel">Cancel RSVP</a></p>` :
-                      `<a href="#" role="button" data-action="rsvp" style="margin-bottom: 0; padding: 0.5rem 1rem;">RSVP: I'm Going</a>`
-                    }
-                  </div>
-                  <a href="${generateIcs(event)}" download="${event.title}.ics" style="margin-bottom: 0;">Add to Calendar</a>
-                </div>
-              </li>
-            `).join('')}</ul>`;
-          } else {
-            element.innerHTML = `<p>No new ${element.id.includes('practice') ? 'practices' : 'races'} scheduled. Check back soon!</p>`;
-          }
-        };
-
-        renderList(practicesList, practices);
-        renderList(racesList, races);
-      }
-
-      document.addEventListener('click', async (event) => {
-        const target = event.target;
-        const action = target.dataset.action;
-        if (!action || (action !== 'rsvp' && action !== 'cancel')) return;
-
-        event.preventDefault();
-        const controlsDiv = target.closest('.rsvp-controls');
-        const eventId = controlsDiv.dataset.eventId;
-        controlsDiv.innerHTML = '<p aria-busy="true" style="margin-bottom: 0;">Updating...</p>';
-
-        if (action === 'rsvp') {
-          await supabase.from('rsvps').insert({ event_id: eventId, user_id: currentUser.id });
-        } else if (action === 'cancel') {
-          await supabase.from('rsvps').delete().eq('event_id', eventId).eq('user_id', currentUser.id);
-        }
-        fetchAndDisplayEvents();
-      });
-
-      async function checkSessionAndLoadData() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { window.location.href = '/login'; return; }
-        currentUser = user;
-        fetchAndDisplayEvents();
-        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-        if (profile && profile.is_admin) adminLink.style.display = 'block';
-      }
-      
-      checkSessionAndLoadData();
-
-      document.getElementById('logout-button').addEventListener('click', async () => {
-        await supabase.auth.signOut();
-        window.location.href = '/';
-      });
+      const calendarOptions = {
+        actions: {
+          clickDay(e, self) {
+            console.log(self.selectedDates);
+          },
+        },
+        settings: {
+          visibility: {
+            theme: 'light',
+          },
+        },
+        events: events.map(event => ({
+          start: event.event_date,
+          title: event.title,
+          description: event.description,
+        })),
+      };
+      const calendar = new VanillaCalendar('#calendar', calendarOptions);
+      calendar.init();
     }
-  </script>
-</body>
-</html>
+
+    async function checkSessionAndLoadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href = '/login'; return; }
+      currentUser = user;
+      fetchAndDisplayEvents();
+      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+      if (profile && profile.is_admin) adminLink.style.display = 'block';
+    }
+    
+    checkSessionAndLoadData();
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    });
+  }
+</script>

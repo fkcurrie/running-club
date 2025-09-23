@@ -1,119 +1,110 @@
 ---
-// src/pages/profile.astro
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+import Layout from '../layouts/Layout.astro';
 ---
 
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Profile | Running Club</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
-</head>
-<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
-  <main class="container">
-    <nav>
-      <ul>
-        <li><strong>My Profile</strong></li>
-      </ul>
-      <ul>
-        <li><a href="/schedule">View Schedule</a></li>
-        <li><a href="#" id="logout-button">Logout</a></li>
-      </ul>
-    </nav>
+<Layout title="My Profile">
+  <h1>Update Your Information</h1>
 
-    <h1>Update Your Information</h1>
+  <article id="profile-form-container">
+    <p aria-busy="true">Loading your profile...</p>
+  </article>
+</Layout>
 
-    <article id="profile-form-container">
-      <p aria-busy="true">Loading your profile...</p>
-    </article>
-  </main>
+<script type="module">
+  import { createClient } from '@supabase/supabase-js';
+  import { Toast } from 'simple-toasts';
 
-  <script>
-    import { createClient } from '@supabase/supabase-js';
+  const body = document.querySelector('body');
+  const supabaseUrl = body.dataset.supabaseUrl;
+  const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-    const body = document.querySelector('body');
-    const supabaseUrl = body.dataset.supabaseUrl;
-    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase credentials not found in the DOM.");
+  } else {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const formContainer = document.getElementById('profile-form-container');
+    let user = null;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Supabase credentials not found in the DOM.");
-    } else {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      const formContainer = document.getElementById('profile-form-container');
-      let user = null;
+    // --- 1. Fetch Profile Data and Display Form ---
+    async function fetchAndDisplayForm() {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        window.location.href = '/login';
+        return;
+      }
+      user = authUser;
 
-      // --- 1. Fetch Profile Data and Display Form ---
-      async function fetchAndDisplayForm() {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) {
-          window.location.href = '/login';
-          return;
-        }
-        user = authUser;
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('full_name, grade')
+        .eq('id', user.id)
+        .single();
 
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('full_name, grade')
-          .eq('id', user.id)
-          .single();
-
-        if (error || !profile) {
-          console.error("Error fetching profile:", error);
-          formContainer.innerHTML = '<p>Could not load your profile data.</p>';
-          return;
-        }
-
-        formContainer.innerHTML = `
-          <form id="profile-form">
-            <label for="email">Email (read-only)</label>
-            <input type="email" id="email" name="email" value="${user.email}" readonly>
-
-            <label for="full_name">Full Name</label>
-            <input type="text" id="full_name" name="full_name" value="${profile.full_name || ''}" required>
-            
-            <label for="grade">Grade</label>
-            <input type="number" id="grade" name="grade" value="${profile.grade || ''}" required>
-            
-            <button type="submit">Update Profile</button>
-          </form>
-        `;
-
-        document.getElementById('profile-form').addEventListener('submit', handleUpdate);
+      if (error || !profile) {
+        console.error("Error fetching profile:", error);
+        formContainer.innerHTML = '<p>Could not load your profile data.</p>';
+        return;
       }
 
-      // --- 2. Handle Form Submission ---
-      async function handleUpdate(event) {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const formData = new FormData(form);
-        
-        const updatedData = {
-          full_name: formData.get('full_name'),
-          grade: formData.get('grade'),
-        };
+      formContainer.innerHTML = `
+        <form id="profile-form">
+          <label for="email">Email (read-only)</label>
+          <input type="email" id="email" name="email" value="${user.email}" readonly>
 
-        const { error } = await supabase
-          .from('profiles')
-          .update(updatedData)
-          .eq('id', user.id);
+          <label for="full_name">Full Name</label>
+          <input type="text" id="full_name" name="full_name" value="${profile.full_name || ''}" required>
+          
+          <label for="grade">Grade</label>
+          <input type="number" id="grade" name="grade" value="${profile.grade || ''}" required>
+          
+          <button type="submit">Update Profile</button>
+        </form>
+      `;
 
-        if (error) {
-          alert('Error updating profile: ' + error.message);
-        } else {
-          alert('Profile updated successfully!');
-        }
-      }
-
-      fetchAndDisplayForm();
-
-      // --- 3. Handle Logout ---
-      document.getElementById('logout-button').addEventListener('click', async () => {
-        await supabase.auth.signOut();
-        window.location.href = '/';
-      });
+      document.getElementById('profile-form').addEventListener('submit', handleUpdate);
     }
-  </script>
-</body>
-</html>
+
+    // --- 2. Handle Form Submission ---
+    async function handleUpdate(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<span aria-busy="true">Updating...</span>';
+
+      const formData = new FormData(form);
+      
+      const updatedData = {
+        full_name: formData.get('full_name'),
+        grade: formData.get('grade'),
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updatedData)
+        .eq('id', user.id);
+
+      if (error) {
+        new Toast({
+          message: `Error: ${error.message}`,
+          type: 'error',
+        });
+      } else {
+        new Toast({
+          message: 'Profile updated successfully!',
+          type: 'success',
+        });
+      }
+      submitButton.disabled = false;
+      submitButton.innerHTML = 'Update Profile';
+    }
+
+    fetchAndDisplayForm();
+
+    // --- 3. Handle Logout ---
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    });
+  }
+</script>

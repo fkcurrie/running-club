@@ -1,73 +1,51 @@
 ---
-// src/pages/admin.astro
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+import Layout from '../layouts/Layout.astro';
 ---
 
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard | Running Club</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
-</head>
-<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
-  <main class="container">
-    <nav>
-      <ul>
-        <li><strong>Admin Dashboard</strong></li>
-      </ul>
-      <ul>
-        <li><a href="/schedule">View Schedule</a></li>
-        <li><a href="#" id="logout-button">Logout</a></li>
-      </ul>
-    </nav>
+<Layout title="Admin Dashboard">
+  <h1>Admin Dashboard</h1>
+  <p>Select a category to manage.</p>
 
-    <h1>Admin Dashboard</h1>
-    <p>Select a category to manage.</p>
+  <div class="grid">
+    <a href="/admin/members" role="button">Manage Members</a>
+    <a href="/admin/announcements" role="button">Manage Announcements</a>
+    <a href="/admin/events" role="button">Manage Events</a>
+  </div>
+</Layout>
 
-    <div class="grid">
-      <a href="/admin/members" role="button">Manage Members</a>
-      <a href="/admin/announcements" role="button">Manage Announcements</a>
-      <a href="/admin/events" role="button">Manage Events</a>
-    </div>
-  </main>
+<script>
+  import { createClient } from '@supabase/supabase-js';
 
-  <script>
-    import { createClient } from '@supabase/supabase-js';
+  const body = document.querySelector('body');
+  const supabaseUrl = body.dataset.supabaseUrl;
+  const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-    const body = document.querySelector('body');
-    const supabaseUrl = body.dataset.supabaseUrl;
-    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase credentials not found in the DOM.");
+  } else {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Supabase credentials not found in the DOM.");
-    } else {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-      async function checkAdminStatus() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          window.location.href = '/login';
-          return;
-        }
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-        if (error || !profile || !profile.is_admin) {
-          console.error('Admin access denied.');
-          window.location.href = '/';
-        }
+    async function checkAdminStatus() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = '/login';
+        return;
       }
-      checkAdminStatus();
-
-      document.getElementById('logout-button').addEventListener('click', async () => {
-        await supabase.auth.signOut();
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+      if (error || !profile || !profile.is_admin) {
+        console.error('Admin access denied.');
         window.location.href = '/';
-      });
+      }
     }
-  </script>
-</body>
-</html>
+    checkAdminStatus();
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    });
+  }
+</script>

@@ -1,341 +1,172 @@
 ---
-// src/pages/admin/members.astro
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+import Layout from '../../layouts/Layout.astro';
 ---
 
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manage Members | Admin Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
-</head>
-<body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
-  <main class="container">
-    <nav>
-      <ul>
-        <li><strong><a href="/admin">Admin Dashboard</a> / Manage Members</strong></li>
-      </ul>
-      <ul>
-        <li><a href="/schedule">View Schedule</a></li>
-        <li><a href="#" id="logout-button">Logout</a></li>
-      </ul>
-    </nav>
+<Layout title="Manage Members">
+  <nav>
+    <ul>
+      <li><strong><a href="/admin">Admin Dashboard</a> / Manage Members</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/schedule">View Schedule</a></li>
+      <li><a href="#" id="logout-button">Logout</a></li>
+    </ul>
+  </nav>
 
-    <h1>Manage Club Members</h1>
+  <h1>Manage Club Members</h1>
 
-    <details>
-      <summary role="button">Create New User</summary>
-      <article>
-        <form id="create-user-form">
-          <div class="grid">
-            <label for="full_name">Full Name
-              <input type="text" id="full_name" name="full_name" required>
-            </label>
-            <label for="grade">Grade
-              <input type="number" id="grade" name="grade" required>
-            </label>
-          </div>
-          <label for="email">School Email</label>
-          <input type="email" id="email" name="email" required>
-          <button type="submit">Create User & Send Invite</button>
-        </form>
-      </article>
-    </details>
-
-    <details>
-      <summary role="button" class="secondary">Import Members</summary>
-      <article>
-        <h2>Bulk Import from CSV</h2>
-        <p>Upload a CSV file with the columns <code>email,full_name,grade</code> to invite multiple members at once.</p>
-        <form id="bulk-import-form">
-          <label for="csv-file">CSV File</label>
-          <input type="file" id="csv-file" name="csvFile" accept=".csv" required>
-          <button type="submit">Import from CSV</button>
-        </form>
-        <pre id="import-results" style="display: none;"></pre>
-      </article>
-      <article>
-        <h2>Import from Google Sheet</h2>
-        <p>
-          <strong>Instructions:</strong> In Google Sheets, go to 
-          <code>File > Share > Publish to the web</code>. Select the correct sheet, choose "Comma-separated values (.csv)", and click "Publish". 
-          Paste the generated URL below.
-        </p>
-        <form id="google-sheet-import-form">
-          <label for="sheet-url">Published Google Sheet URL</label>
-          <input type="url" id="sheet-url" name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/e/..." required>
-          <button type="submit">Import from Sheet</button>
-        </form>
-        <pre id="sheet-import-results" style="display: none;"></pre>
-      </article>
-    </details>
-
+  <details>
+    <summary role="button">Create New User</summary>
     <article>
-      <h2>Existing Members</h2>
-      <table id="members-table">
-        <thead>
-          <tr>
-            <th>Full Name</th>
-            <th>Grade</th>
-            <th>Email</th>
-            <th>Status</th>
-            <th>Admin</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="members-tbody">
-          <tr><td colspan="6" aria-busy="true">Loading members...</td></tr>
-        </tbody>
-      </table>
+      <form id="create-user-form">
+        <div class="grid">
+          <label for="full_name">Full Name
+            <input type="text" id="full_name" name="full_name" required>
+          </label>
+          <label for="grade">Grade
+            <input type="number" id="grade" name="grade" required>
+          </label>
+        </div>
+        <label for="email">School Email</label>
+        <input type="email" id="email" name="email" required>
+        <button type="submit">Create User & Send Invite</button>
+      </form>
     </article>
-  </main>
+  </details>
 
-  <script>
-    import { createClient } from '@supabase/supabase-js';
+  <div id="members-grid"></div>
+</Layout>
 
-    const body = document.querySelector('body');
-    const supabaseUrl = body.dataset.supabaseUrl;
-    const supabaseAnonKey = body.dataset.supabaseAnonKey;
+<script type="module">
+  import { createClient } from '@supabase/supabase-js';
+  import { Grid, h } from 'gridjs';
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Supabase credentials not found in the DOM.");
-    } else {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      const membersTbody = document.getElementById('members-tbody');
-      let members = []; // Store members data to avoid re-fetching
+  const body = document.querySelector('body');
+  const supabaseUrl = body.dataset.supabaseUrl;
+  const supabaseAnonKey = body.dataset.supabaseAnonKey;
 
-      // --- 1. Fetch and Display Members via Edge Function ---
-      async function fetchAndDisplayMembers() {
-        const { data, error } = await supabase.functions.invoke('manage-user', {
-          method: 'POST',
-          body: { action: 'list' },
-        });
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase credentials not found in the DOM.");
+  } else {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-        if (error) {
-          console.error("Error fetching members:", error);
-          membersTbody.innerHTML = `<tr><td colspan="6">Error loading members: ${error.message}</td></tr>`;
-          return;
-        }
-        
-        members = data.users;
-        renderTable();
-      }
+    async function checkAdminStatusAndLoadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href = '/login'; return; }
 
-      // --- 2. Render Table ---
-      function renderTable() {
-        if (members.length === 0) {
-          membersTbody.innerHTML = '<tr><td colspan="6">No members have signed up yet.</td></tr>';
-          return;
-        }
-
-        membersTbody.innerHTML = members.map((member) => `
-          <tr data-id="${member.id}">
-            <td>${member.full_name || 'N/A'}</td>
-            <td>${member.grade || 'N/A'}</td>
-            <td>${member.email}</td>
-            <td>
-              ${member.email_confirmed_at ? 
-                '<span style="color: var(--pico-color-green-500);">Confirmed</span>' : 
-                `<a href="#" data-action="confirm" style="color: var(--pico-color-orange-500);">Confirm Email</a>`
-              }
-            </td>
-            <td>
-              <label>
-                <input type="checkbox" data-action="toggle-admin" ${member.is_admin ? 'checked' : ''}>
-              </label>
-            </td>
-            <td>
-              <a href="/admin/members/edit/${member.id}" role="button" class="contrast" style="margin: 0; padding: 0.5rem 1rem;">Edit</a>
-              <a href="#" role="button" data-action="delete" style="margin: 0; padding: 0.5rem 1rem; background-color: var(--pico-color-red-500); border-color: var(--pico-color-red-500);">Delete</a>
-            </td>
-          </tr>
-        `).join('');
-      }
-
-      // --- 3. Handle Table Actions ---
-      membersTbody.addEventListener('click', async (event) => {
-        const target = event.target;
-        const action = target.dataset.action;
-        if (!action) return;
-
-        const row = target.closest('tr');
-        const userId = row.dataset.id;
-        event.preventDefault();
-
-        let rpcAction = null;
-        let body = { userId };
-        let confirmMessage = '';
-
-        if (action === 'confirm') {
-          rpcAction = 'confirm_email';
-        } else if (action === 'toggle-admin') {
-          const isAdmin = target.checked;
-          rpcAction = isAdmin ? 'grant_admin' : 'revoke_admin';
-          body.is_admin = isAdmin;
-        } else if (action === 'delete') {
-          if (!confirm('Are you sure you want to permanently delete this user? This will remove their login and all their data.')) return;
-          rpcAction = 'delete_user';
-        }
-
-        if (rpcAction) {
-          target.setAttribute('aria-busy', 'true');
-          const { error } = await supabase.functions.invoke('manage-user', {
-            method: 'POST',
-            body: { action: rpcAction, ...body },
-          });
-          target.removeAttribute('aria-busy');
-
-          if (error) {
-            alert(`Error: ${error.message}`);
-          } else {
-            // Refresh the list to show the change
-            fetchAndDisplayMembers();
-          }
-        }
-      });
-
-      // --- 4. Page Protection and Data Loading ---
-      async function checkAdminStatusAndLoadData() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { window.location.href = '/login'; return; }
-
-        const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-        if (error || !profile || !profile.is_admin) {
-          console.error('Admin access denied.');
-          window.location.href = '/';
-          return;
-        }
-        
-        fetchAndDisplayMembers();
-      }
-      checkAdminStatusAndLoadData();
-
-      // --- 5. Handle Create User Form ---
-      const createUserForm = document.getElementById('create-user-form');
-      createUserForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const formData = new FormData(createUserForm);
-        const newUser = {
-          email: formData.get('email'),
-          full_name: formData.get('full_name'),
-          grade: formData.get('grade'),
-        };
-
-        const { error } = await supabase.functions.invoke('manage-user', {
-          method: 'POST',
-          body: { action: 'create_user', user: newUser },
-        });
-
-        if (error) {
-          alert(`Error creating user: ${error.message}`);
-        } else {
-          alert('User created successfully! They will receive an invitation email to set their password.');
-          createUserForm.reset();
-          fetchAndDisplayMembers(); // Refresh the list
-        }
-      });
-
-      // --- 6. Handle Bulk Import Form ---
-      const bulkImportForm = document.getElementById('bulk-import-form');
-      const resultsArea = document.getElementById('import-results');
-
-      bulkImportForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const fileInput = document.getElementById('csv-file');
-        const file = fileInput.files[0];
-
-        if (!file) {
-          alert('Please select a CSV file to upload.');
-          return;
-        }
-
-        // Simple CSV parsing
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-          const text = e.target.result;
-          const lines = text.split('\n').filter(line => line.trim() !== '');
-          const header = lines.shift().trim().split(',');
-
-          // Basic validation
-          if (header[0] !== 'email' || header[1] !== 'full_name' || header[2] !== 'grade') {
-            alert('Invalid CSV format. Please ensure the header is email,full_name,grade');
-            return;
-          }
-
-          const usersToCreate = lines.map(line => {
-            const values = line.trim().split(',');
-            return {
-              email: values[0],
-              full_name: values[1],
-              grade: parseInt(values[2], 10),
-            };
-          });
-
-          resultsArea.style.display = 'block';
-          resultsArea.textContent = `Importing ${usersToCreate.length} users...`;
-
-          const { data, error } = await supabase.functions.invoke('manage-user', {
-            method: 'POST',
-            body: { action: 'bulk_create_users', users: usersToCreate },
-          });
-
-          if (error) {
-            resultsArea.textContent = `Error during import: ${error.message}`;
-          } else {
-            const { successful, failed } = data;
-            let resultsText = `Import Complete!\n\nSuccessful Invites (${successful.length}):\n`;
-            resultsText += successful.map(u => `- ${u.email}`).join('\n');
-            resultsText += `\n\nFailed Invites (${failed.length}):\n`;
-            resultsText += failed.map(f => `- ${f.email}: ${f.error}`).join('\n');
-            resultsArea.textContent = resultsText;
-            fetchAndDisplayMembers(); // Refresh the list
-          }
-        };
-        reader.readAsText(file);
-      });
-
-      // --- 7. Handle Google Sheet Import ---
-      const googleSheetImportForm = document.getElementById('google-sheet-import-form');
-      const sheetResultsArea = document.getElementById('sheet-import-results');
-
-      googleSheetImportForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const sheetUrl = document.getElementById('sheet-url').value;
-
-        if (!sheetUrl) {
-          alert('Please enter a Google Sheet URL.');
-          return;
-        }
-
-        sheetResultsArea.style.display = 'block';
-        sheetResultsArea.textContent = 'Importing from Google Sheet...';
-
-        const { data, error } = await supabase.functions.invoke('manage-user', {
-          method: 'POST',
-          body: { action: 'bulk_create_from_sheet', sheetUrl: sheetUrl },
-        });
-
-        if (error) {
-          sheetResultsArea.textContent = `Error during import: ${error.message}`;
-        } else {
-          const { successful, failed } = data;
-          let resultsText = `Import Complete!\n\nSuccessful Invites (${successful.length}):\n`;
-          resultsText += successful.map(u => `- ${u.email}`).join('\n');
-          resultsText += `\n\nFailed Invites (${failed.length}):\n`;
-          resultsText += failed.map(f => `- ${f.email}: ${f.error}`).join('\n');
-          sheetResultsArea.textContent = resultsText;
-          fetchAndDisplayMembers(); // Refresh the list
-        }
-      });
-
-      // --- 8. Handle Logout ---
-      document.getElementById('logout-button').addEventListener('click', async () => {
-        await supabase.auth.signOut();
+      const { data: profile, error } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+      if (error || !profile || !profile.is_admin) {
+        console.error('Admin access denied.');
         window.location.href = '/';
-      });
+        return;
+      }
+      
+      const grid = new Grid({
+        columns: [
+          'Full Name', 
+          'Grade', 
+          'Email', 
+          {
+            name: 'Status',
+            formatter: (cell) => cell ? 'Confirmed' : 'Pending'
+          },
+          {
+            name: 'Admin',
+            formatter: (cell, row) => {
+              return h('input', {
+                type: 'checkbox',
+                checked: cell,
+                onclick: async () => {
+                  const rpcAction = !cell ? 'grant_admin' : 'revoke_admin';
+                  await supabase.functions.invoke('manage-user', {
+                    method: 'POST',
+                    body: { action: rpcAction, userId: row.cells[5].data },
+                  });
+                }
+              });
+            }
+          },
+          {
+            name: 'Actions',
+            formatter: (cell, row) => {
+              return h('div', { className: 'grid' }, [
+                h('a', {
+                  href: `/admin/members/edit/${row.cells[5].data}`,
+                  role: 'button',
+                  className: 'contrast',
+                }, 'Edit'),
+                h('a', {
+                  href: '#',
+                  role: 'button',
+                  className: 'secondary',
+                  onclick: async () => {
+                    if (confirm('Are you sure you want to delete this user?')) {
+                      await supabase.functions.invoke('manage-user', {
+                        method: 'POST',
+                        body: { action: 'delete_user', userId: row.cells[5].data },
+                      });
+                      grid.forceRender();
+                    }
+                  }
+                }, 'Delete')
+              ]);
+            }
+          },
+          { name: 'id', hidden: true }
+        ],
+        server: {
+          url: `${supabaseUrl}/functions/v1/manage-user`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`
+          },
+          body: JSON.stringify({ action: 'list' }),
+          then: data => data.users.map(user => [
+            user.full_name,
+            user.grade,
+            user.email,
+            user.email_confirmed_at,
+            user.is_admin,
+            user.id
+          ])
+        },
+        search: true,
+        sort: true,
+        pagination: true,
+      }).render(document.getElementById('members-grid'));
     }
-  </script>
-</body>
-</html>
+
+    checkAdminStatusAndLoadData();
+
+    // --- Handle Create User Form ---
+    const createUserForm = document.getElementById('create-user-form');
+    createUserForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(createUserForm);
+      const newUser = {
+        email: formData.get('email'),
+        full_name: formData.get('full_name'),
+        grade: formData.get('grade'),
+      };
+
+      const { error } = await supabase.functions.invoke('manage-user', {
+        method: 'POST',
+        body: { action: 'create_user', user: newUser },
+      });
+
+      if (error) {
+        alert(`Error creating user: ${error.message}`);
+      } else {
+        alert('User created successfully! They will receive an invitation email to set their password.');
+        createUserForm.reset();
+        // Re-render the grid to show the new user
+        checkAdminStatusAndLoadData();
+      }
+    });
+
+    document.getElementById('logout-button').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    });
+  }
+</script>
